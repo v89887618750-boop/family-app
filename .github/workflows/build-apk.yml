@@ -24,8 +24,14 @@ jobs:
       - name: Restore missing platform folders
         run: flutter create . --platforms=android --project-name family_lists
 
-      - name: Update Kotlin Version
-        run: sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
+      - name: Force Kotlin Version in settings.gradle
+        run: |
+          if [ -f android/settings.gradle ]; then
+            sed -i 's/id "org.jetbrains.kotlin.android" version .*/id "org.jetbrains.kotlin.android" version "1.9.24" apply false/' android/settings.gradle
+          fi
+          if [ -f android/build.gradle ]; then
+            sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
+          fi
 
       - name: Install dependencies
         run: flutter pub get
