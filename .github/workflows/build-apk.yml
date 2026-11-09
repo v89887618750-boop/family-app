@@ -33,6 +33,10 @@ jobs:
             sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
           fi
 
+      - name: Fix AAPT2 for SDK 35
+        run: |
+          echo "android.aapt2Version=8.6.1-11315950" >> android/gradle.properties
+
       - name: Install dependencies
         run: flutter pub get
 
