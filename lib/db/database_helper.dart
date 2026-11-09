@@ -16,8 +16,8 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    // Версия 4: добавлены фото для ДР и заметки/фото для подарков
-    return await openDatabase(path, version: 4, onCreate: _createDB, onUpgrade: _upgradeDB);
+    // Версия 7: добавлена таблица истории показаний счетчиков
+    return await openDatabase(path, version: 7, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -27,7 +27,9 @@ class DatabaseHelper {
       title TEXT NOT NULL, 
       category TEXT NOT NULL, 
       periodicity TEXT NOT NULL, 
-      isCompleted INTEGER NOT NULL
+      isCompleted INTEGER NOT NULL,
+      due_date TEXT,
+      reading_value TEXT
     )''');
 
     // Таблица покупок
@@ -39,7 +41,7 @@ class DatabaseHelper {
       isCompleted INTEGER NOT NULL
     )''');
 
-    // Таблица дней рождения (с напоминаниями и аватаркой)
+    // Таблица дней рождения
     await db.execute('''CREATE TABLE birthdays (
       id INTEGER PRIMARY KEY AUTOINCREMENT, 
       name TEXT NOT NULL, 
@@ -49,7 +51,7 @@ class DatabaseHelper {
       photo_path TEXT
     )''');
 
-    // Таблица подарков (с заметками и фото)
+    // Таблица подарков (Wishlist)
     await db.execute('''CREATE TABLE gifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, 
       title TEXT NOT NULL, 
@@ -65,37 +67,55 @@ class DatabaseHelper {
       id INTEGER PRIMARY KEY AUTOINCREMENT, 
       name TEXT NOT NULL UNIQUE
     )''');
+
+    // Таблица истории показаний счетчиков
+    await db.execute('''CREATE TABLE meter_readings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL,
+      reading_value REAL NOT NULL,
+      date TEXT NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+    )''');
     
-    // Добавляем базовые категории при первом запуске
+    // Добавляем базовые категории
     for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
       await db.insert('categories', {'name': cat}, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    // Обновление до версии 2 (напоминания для ДР)
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE birthdays ADD COLUMN remind_days INTEGER DEFAULT 1');
     }
-    
-    // Обновление до версии 4 (фото и заметки)
     if (oldVersion < 4) {
-      // Добавляем колонки, если их еще нет
       try {
         await db.execute('ALTER TABLE birthdays ADD COLUMN photo_path TEXT');
-      } catch (e) {
-        // Колонка уже существует
-      }
+      } catch (e) {}
       try {
         await db.execute('ALTER TABLE gifts ADD COLUMN note TEXT');
-      } catch (e) {
-        // Колонка уже существует
-      }
+      } catch (e) {}
       try {
         await db.execute('ALTER TABLE gifts ADD COLUMN photo_path TEXT');
-      } catch (e) {
-        // Колонка уже существует
-      }
+      } catch (e) {}
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute('ALTER TABLE tasks ADD COLUMN due_date TEXT');
+      } catch (e) {}
+    }
+    if (oldVersion < 6) {
+      try {
+        await db.execute('ALTER TABLE tasks ADD COLUMN reading_value TEXT');
+      } catch (e) {}
+    }
+    if (oldVersion < 7) {
+      await db.execute('''CREATE TABLE meter_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        reading_value REAL NOT NULL,
+        date TEXT NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+      )''');
     }
   }
 
