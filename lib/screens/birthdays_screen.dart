@@ -39,7 +39,7 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (photoPath != null) 
-                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath))),
+                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath!))),
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
