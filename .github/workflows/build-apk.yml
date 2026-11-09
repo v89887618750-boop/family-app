@@ -24,13 +24,20 @@ jobs:
       - name: Restore missing platform folders
         run: flutter create . --platforms=android --project-name family_lists
 
-      - name: Force Kotlin Version in settings.gradle
+      - name: Force Kotlin Version
         run: |
           if [ -f android/settings.gradle ]; then
             sed -i 's/id "org.jetbrains.kotlin.android" version .*/id "org.jetbrains.kotlin.android" version "1.9.24" apply false/' android/settings.gradle
           fi
           if [ -f android/build.gradle ]; then
             sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
+          fi
+
+      - name: Update compileSdk to 35
+        run: |
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
+            sed -i 's/compileSdk .*/compileSdk 35/' android/app/build.gradle
           fi
 
       - name: Fix AAPT2 for SDK 35
