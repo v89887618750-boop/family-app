@@ -56,19 +56,22 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                   Text(status, style: TextStyle(fontWeight: FontWeight.bold, color: isSoon ? Colors.pink : Colors.teal)),
                   const SizedBox(width: 8),
                   // Кнопка для перехода к подаркам
-                  IconButton(
+                                    IconButton(
                     icon: const Icon(Icons.card_giftcard, color: Colors.teal),
                     tooltip: 'Список желаний',
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => GiftsScreen(filterForWhom: bday.name),
+                          // Передаем имя и фото в экран подарков
+                          builder: (context) => GiftsScreen(
+                            filterForWhom: bday.name,
+                            avatarPath: bday.photoPath,
+                          ),
                         ),
                       );
                     },
                   ),
-                ],
               ),
             ),
           );
