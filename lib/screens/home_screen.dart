@@ -3,6 +3,7 @@ import 'tasks_screen.dart';
 import 'purchases_screen.dart';
 import 'birthdays_screen.dart';
 import 'gifts_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,11 +13,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
   final List<Widget> _screens = [
     const TasksScreen(),
     const PurchasesScreen(),
     const BirthdaysScreen(),
     const GiftsScreen(),
+    const SettingsScreen(),
   ];
 
   @override
@@ -31,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'Покупки'),
           NavigationDestination(icon: Icon(Icons.cake), label: 'Дни рождения'),
           NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Подарки'),
+          NavigationDestination(icon: Icon(Icons.settings), label: 'Настройки'),
         ],
       ),
     );
