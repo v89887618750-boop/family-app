@@ -12,10 +12,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _categories = [];
 
   @override
-  void initState() {
-    super.initState();
-    _loadCategories();
-  }
+  void initState() { super.initState(); _loadCategories(); }
 
   Future<void> _loadCategories() async {
     final db = await DatabaseHelper.instance.database;
@@ -47,24 +44,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _deleteCategory(String name) async {
-    final db = await DatabaseHelper.instance.database;
-    await db.delete('categories', where: 'name = ?', whereArgs: [name]);
-    _loadCategories();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
         children: [
-          const ListTile(title: Text('Категории', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+          const ListTile(title: Text('Внешний вид', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+          SwitchListTile(
+            title: const Text('Тёмная тема'),
+            secondary: const Icon(Icons.dark_mode),
+            value: false, 
+            onChanged: (val) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Тёмная тема появится в следующем обновлении!')));
+            },
+          ),
+          const Divider(),
+          const ListTile(title: Text('Категории (Дом, Работа и т.д.)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
           ..._categories.map((cat) => ListTile(
                 title: Text(cat),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _deleteCategory(cat),
+                  onPressed: () async {
+                    final db = await DatabaseHelper.instance.database;
+                    await db.delete('categories', where: 'name = ?', whereArgs: [cat]);
+                    _loadCategories();
+                  },
                 ),
               )),
           ListTile(
@@ -74,7 +79,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
           const ListTile(title: Text('О приложении', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-          const ListTile(leading: Icon(Icons.info_outline), title: Text('Версия'), subtitle: Text('1.0.0')),
+          const ListTile(
+            leading: Icon(Icons.family_restroom, color: Colors.teal), 
+            title: Text('Volkov Family App'), 
+            subtitle: Text('Версия 2.0.0'),
+          ),
         ],
       ),
     );
