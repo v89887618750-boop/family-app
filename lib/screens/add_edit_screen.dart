@@ -37,22 +37,26 @@ class _AddEditScreenState extends State<AddEditScreen> {
     if (_titleController.text.isEmpty) return;
     final db = await DatabaseHelper.instance.database;
     
-    final data = {
-      'title': _titleController.text,
-      'category': _selectedCategory,
-      'periodicity': _periodicity,
-      'isCompleted': widget.item?.isCompleted == true ? 1 : 0,
-    };
+    final titleStr = _titleController.text;
+    final categoryStr = _selectedCategory;
+    final periodicityStr = _periodicity;
+    final isComp = widget.item?.isCompleted == true ? 1 : 0;
 
     if (widget.item == null) {
       // Создаем новое
       if (widget.type == 'task') {
-        await db.insert('tasks', Task(title: data['title'], category: data['category'], periodicity: data['periodicity']).toMap());
+        await db.insert('tasks', Task(title: titleStr, category: categoryStr, periodicity: periodicityStr).toMap());
       } else {
-        await db.insert('purchases', Purchase(title: data['title'], category: data['category'], periodicity: data['periodicity']).toMap());
+        await db.insert('purchases', Purchase(title: titleStr, category: categoryStr, periodicity: periodicityStr).toMap());
       }
     } else {
       // Обновляем старое
+      final data = {
+        'title': titleStr,
+        'category': categoryStr,
+        'periodicity': periodicityStr,
+        'isCompleted': isComp,
+      };
       await db.update(widget.type == 'task' ? 'tasks' : 'purchases', data, where: 'id = ?', whereArgs: [widget.item.id]);
     }
     if (mounted) Navigator.pop(context, true);
