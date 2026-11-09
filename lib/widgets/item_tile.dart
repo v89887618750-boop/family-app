@@ -5,18 +5,24 @@ class ItemTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool isCompleted;
+  final bool isOverdue;
+  final String? readingValue;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onShowStats; // Кнопка перехода к графику
 
   const ItemTile({
     super.key,
     required this.title,
     required this.subtitle,
     required this.isCompleted,
+    this.isOverdue = false,
+    this.readingValue,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
+    this.onShowStats,
   });
 
   @override
@@ -54,16 +60,50 @@ class ItemTile extends StatelessWidget {
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: ListTile(
-          onTap: onEdit, // Нажатие на карточку тоже открывает редактирование
+          onTap: onEdit, 
           leading: Checkbox(value: isCompleted, onChanged: (_) => onToggle()),
-          title: Text(
-            title,
-            style: TextStyle(
-              decoration: isCompleted ? TextDecoration.lineThrough : null,
-              color: isCompleted ? Colors.grey : null,
-            ),
+          title: Row(
+            children: [
+              // Иконка лампочки для счетчиков
+              if (readingValue != null) 
+                const Icon(Icons.lightbulb, size: 18, color: Colors.orange),
+              if (readingValue != null) 
+                const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                    color: isCompleted ? Colors.grey : (isOverdue ? Colors.red : null),
+                    fontWeight: isOverdue && !isCompleted ? FontWeight.bold : null,
+                  ),
+                ),
+              ),
+            ],
           ),
-          subtitle: Text(subtitle),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                subtitle, 
+                style: TextStyle(color: isOverdue && !isCompleted ? Colors.red.shade300 : null)
+              ),
+              // Показываем последние введенные показания
+              if (readingValue != null)
+                Text(
+                  'Показания: $readingValue', 
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)
+                ),
+            ],
+          ),
+          // Кнопка графика (появляется только если это счетчик)
+          trailing: readingValue != null && onShowStats != null
+              ? IconButton(
+                  icon: const Icon(Icons.bar_chart, color: Colors.teal),
+                  tooltip: 'Статистика потребления',
+                  onPressed: onShowStats,
+                )
+              : null,
         ),
       ),
     );
