@@ -15,6 +15,7 @@ dependencies:
   flutter_slidable: ^3.1.2
   image_picker: ^1.1.2
   url_launcher: ^6.3.0
+  fl_chart: ^0.68.0  # <-- ДОБАВЛЕНА БИБЛИОТЕКА ДЛЯ ГРАФИКОВ
 
 dev_dependencies:
   flutter_test:
