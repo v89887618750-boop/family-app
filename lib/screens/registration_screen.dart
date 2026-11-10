@@ -17,7 +17,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _surnameController = TextEditingController();
   final _nameController = TextEditingController();
   final _patronymicController = TextEditingController();
-  final _maidenController = TextEditingController(); // Девичья фамилия
+  final _maidenNameController = TextEditingController(); // Девичья фамилия
   final _dateController = TextEditingController();
   String? _photoPath;
 
@@ -67,7 +67,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     final db = await DatabaseHelper.instance.database;
     await db.insert('family_members', {
       'name': fullName,
-      'maiden_name': _maidenController.text.trim().isEmpty ? null : _maidenController.text.trim(), // Сохраняем девичью
       'relation': 'Я',
       'photo_path': _photoPath,
     });
@@ -98,6 +97,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
               const SizedBox(height: 24),
               
+              // Аватарка
               GestureDetector(
                 onTap: () async {
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -112,6 +112,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
               const SizedBox(height: 24),
 
+              // Фамилия и Имя
               Row(
                 children: [
                   Expanded(
@@ -130,32 +131,35 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+              
+              // Отчество
               TextField(
                 controller: _patronymicController,
                 decoration: const InputDecoration(labelText: 'Отчество (если есть)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
-              
-              // НОВОЕ ПОЛЕ: Девичья фамилия
+
+              // Девичья фамилия (добавил, так как на скриншоте она есть)
               TextField(
-                controller: _maidenController,
-                decoration: const InputDecoration(
-                  labelText: 'Девичья фамилия (если есть)', 
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.female, color: Colors.pink),
-                ),
+                controller: _maidenNameController,
+                decoration: const InputDecoration(labelText: 'Девичья фамилия (если есть)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               
-              GestureDetector(
-                onTap: _pickDate,
-                child: AbsorbPointer(
-                  child: TextField(
-                    controller: _dateController,
-                    decoration: const InputDecoration(
-                      labelText: 'Дата рождения',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
+              // Поле даты (теперь это кнопка, а не текстовое поле)
+              InkWell(
+                onTap: _pickDate, // При нажатии вызываем календарь
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Дата рождения',
+                    border: OutlineInputBorder(),
+                    suffixIcon: Icon(Icons.calendar_today),
+                  ),
+                  child: Text(
+                    _dateController.text.isEmpty ? 'Нажмите, чтобы выбрать' : _dateController.text,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: _dateController.text.isEmpty ? Colors.grey : Colors.black87,
                     ),
                   ),
                 ),
