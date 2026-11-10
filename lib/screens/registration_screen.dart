@@ -14,12 +14,14 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
+  final _surnameController = TextEditingController();
   final _nameController = TextEditingController();
+  final _patronymicController = TextEditingController();
+  final _maidenController = TextEditingController(); // Девичья фамилия
   final _dateController = TextEditingController();
   String? _photoPath;
 
   Future<void> _pickDate() async {
-    // Скрываем клавиатуру, чтобы не мешала календарю
     FocusScope.of(context).unfocus();
     
     DateTime initialDate = DateTime.now().subtract(const Duration(days: 365 * 25));
@@ -43,19 +45,29 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (_nameController.text.trim().isEmpty || _dateController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Пожалуйста, заполните имя и дату рождения')));
+    if (_surnameController.text.trim().isEmpty || 
+        _nameController.text.trim().isEmpty || 
+        _dateController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пожалуйста, заполните Фамилию, Имя и Дату рождения')),
+      );
       return;
     }
 
+    String fullName = '${_surnameController.text.trim()} ${_nameController.text.trim()}';
+    if (_patronymicController.text.trim().isNotEmpty) {
+      fullName += ' ${_patronymicController.text.trim()}';
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('my_name', _nameController.text.trim());
+    await prefs.setString('my_name', fullName);
     await prefs.setString('my_date', _dateController.text.trim());
     if (_photoPath != null) await prefs.setString('my_photo', _photoPath!);
 
     final db = await DatabaseHelper.instance.database;
     await db.insert('family_members', {
-      'name': _nameController.text.trim(),
+      'name': fullName,
+      'maiden_name': _maidenController.text.trim().isEmpty ? null : _maidenController.text.trim(), // Сохраняем девичью
       'relation': 'Я',
       'photo_path': _photoPath,
     });
@@ -84,9 +96,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               
-              // Аватарка
               GestureDetector(
                 onTap: () async {
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -101,23 +112,50 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Поля ввода
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _surnameController,
+                      decoration: const InputDecoration(labelText: 'Фамилия', border: OutlineInputBorder()),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Ваше Имя и Фамилия', border: OutlineInputBorder()),
+                controller: _patronymicController,
+                decoration: const InputDecoration(labelText: 'Отчество (если есть)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               
-              // ИСПРАВЛЕННОЕ ПОЛЕ ДАТЫ
+              // НОВОЕ ПОЛЕ: Девичья фамилия
+              TextField(
+                controller: _maidenController,
+                decoration: const InputDecoration(
+                  labelText: 'Девичья фамилия (если есть)', 
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.female, color: Colors.pink),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
               GestureDetector(
-                onTap: _pickDate, // Вызываем календарь при нажатии на всю область
-                child: AbsorbPointer( // Блокируем ввод с клавиатуры, чтобы не было конфликтов
+                onTap: _pickDate,
+                child: AbsorbPointer(
                   child: TextField(
                     controller: _dateController,
                     decoration: const InputDecoration(
                       labelText: 'Дата рождения',
                       border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today), // Иконка календаря для красоты
+                      suffixIcon: Icon(Icons.calendar_today),
                     ),
                   ),
                 ),
