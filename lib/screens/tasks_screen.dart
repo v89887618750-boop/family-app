@@ -61,57 +61,43 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     _loadData();
   }
 
-  // ИСПРАВЛЕННАЯ ФИЛЬТРАЦИЯ
   List<Task> _getFilteredTasks(String filter) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final nextWeek = today.add(const Duration(days: 7));
 
     List<Task> filtered = _allTasks.where((t) {
-      // Если задача выполнена, мы не показываем ее в "Сегодня" и "На неделе", 
-      // но показываем в "Все" и "Регулярные"
       if (filter != 'all' && filter != 'regular' && t.isCompleted) {
         return false;
       }
 
-      // Логика по вкладкам
       if (filter == 'today') {
-        // 1. Ежедневные задачи всегда в "Сегодня"
         if (t.periodicity == 'Ежедневно') return true;
-        
-        // 2. Разовые задачи, если дедлайн сегодня или просрочен
         if (t.dueDate != null) {
            final due = DateTime.parse(t.dueDate!);
-           // Если дата дедлайна совпадает с сегодняшней
            if (due.year == today.year && due.month == today.month && due.day == today.day) return true;
            
-           // Для счетчиков показываем за 2 дня до дедлайна
            if (t.readingValue != null) {
              final diff = due.difference(today).inDays;
-             if (diff >= 0 && diff <= 2) return true;
+             if (diff >= 0 && diff <= 2) return true; // Счетчики за 2 дня
            }
         }
         return false;
       } 
       else if (filter == 'week') {
-        if (t.periodicity == 'Ежедневно') return false; // Ежедневные не дублируем тут
+        if (t.periodicity == 'Ежедневно') return false; 
         if (t.dueDate != null) {
           final due = DateTime.parse(t.dueDate!);
-          // Показываем, если дедлайн в ближайшие 7 дней
           return due.isAfter(today.subtract(const Duration(days: 1))) && due.isBefore(nextWeek);
         }
         return false;
       } 
       else if (filter == 'regular') {
-        // Сюда попадают все повторяющиеся дела
         return t.periodicity == 'Ежедневно' || t.periodicity == 'Ежемесячно' || t.periodicity == 'Ежегодно';
       }
-      
-      // Для 'all' показываем всё
       return true; 
     }).toList();
 
-    // Сортировка: невыполненные сверху
     filtered.sort((a, b) {
       if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
       return a.title.compareTo(b.title);
@@ -159,6 +145,20 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           onToggle: () async {
             final db = await DatabaseHelper.instance.database;
             task.isCompleted = !task.isCompleted;
+            
+            // --- ЛОГИКА ПРОЛОНГАЦИИ ---
+            if (task.isCompleted) {
+              // Если это счетчик или ежемесячная задача, переносим дату на следующий месяц
+              if (task.periodicity == 'Ежемесячно' && task.dueDate != null) {
+                DateTime due = DateTime.parse(task.dueDate!);
+                // Прибавляем один месяц (если сейчас декабрь, перенесет на январь следующего года)
+                DateTime nextDue = DateTime(due.year, due.month + 1, due.day);
+                task.dueDate = nextDue.toIso8601String().split('T')[0];
+                task.isCompleted = false; // Снимаем галочку, чтобы задача снова стала активной!
+              }
+            }
+            // -------------------------
+
             await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
             
             if (task.isCompleted) {
