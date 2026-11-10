@@ -70,7 +70,10 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-                    if (picked != null) setDialogState(() => photoPath = picked.path);
+                    if (picked != null) {
+                      // Обновляем путь к фото в состоянии диалога
+                      setDialogState(() => photoPath = picked.path);
+                    }
                   },
                   icon: const Icon(Icons.photo_camera), 
                   label: const Text('Выбрать аватарку'),
@@ -109,7 +112,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             ElevatedButton(
               onPressed: () async {
                 String cleanName = nameController.text.trim();
-                // Умная замена точек и слешей на дефисы
                 String cleanDate = dateController.text.trim().replaceAll('.', '-').replaceAll('/', '-');
 
                 if (cleanName.isEmpty || cleanDate.isEmpty) {
@@ -120,20 +122,22 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                 }
 
                 final db = await DatabaseHelper.instance.database;
-                final bday = Birthday(
-                  name: cleanName, 
-                  date: cleanDate, 
-                  category: 'Семья', 
-                  remindDays: remindDays,
-                  photoPath: photoPath
-                );
                 
-                // Сохранение или обновление
+                // Формируем данные БЕЗ id
+                final data = {
+                  'name': cleanName,
+                  'date': cleanDate,
+                  'category': 'Семья',
+                  'remind_days': remindDays,
+                  'photo_path': photoPath, // Передаем актуальный путь к фото
+                };
+
                 try {
                   if (item == null) {
-                    await db.insert('birthdays', bday.toMap());
+                    await db.insert('birthdays', data);
                   } else {
-                    await db.update('birthdays', bday.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                    // Обновляем запись. WHERE id = item.id
+                    await db.update('birthdays', data, where: 'id = ?', whereArgs: [item.id]);
                   }
                   if (mounted) Navigator.pop(context);
                   _loadBirthdays();
