@@ -10,7 +10,7 @@ class ItemTile extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final VoidCallback? onShowStats; // Кнопка перехода к графику
+  final VoidCallback? onShowStats;
 
   const ItemTile({
     super.key,
@@ -25,6 +25,25 @@ class ItemTile extends StatelessWidget {
     this.onShowStats,
   });
 
+  // Функция подтверждения удаления
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить?'),
+        content: Text('Вы уверены, что хотите удалить "$title"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text('Удалить', style: TextStyle(color: Colors.red))
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) onDelete();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Slidable(
@@ -32,9 +51,10 @@ class ItemTile extends StatelessWidget {
       // Свайп влево (удаление)
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
+        extentRatio: 0.25,
         children: [
           SlidableAction(
-            onPressed: (_) => onDelete(),
+            onPressed: (context) => _confirmDelete(context), // Вызов подтверждения
             backgroundColor: Colors.red,
             foregroundColor: Colors.white,
             icon: Icons.delete,
