@@ -1,5 +1,6 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:confetti/confetti.dart'; // Импортируем конфетти
+import 'package:confetti/confetti.dart';
 import '../db/database_helper.dart';
 import '../models/purchase.dart';
 import 'add_edit_screen.dart';
@@ -22,15 +23,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 3, vsync: this); 
-    // Инициализируем салют
-    _confettiController = ConfettiController(duration: const Duration(seconds: 1));
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
     _loadData(); 
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _confettiController.dispose(); // Обязательно очищаем
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -111,15 +111,15 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
                   item.isCompleted = !item.isCompleted;
                   await db.update('purchases', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
                   
-                  // ЗАПУСК САЛЮТА, если покупку отметили как купленную
+                  // ЗАПУСК САЛЮТА
                   if (item.isCompleted) {
                     if (item.periodicity == 'Ежегодно') {
-                      // Для глобальных покупок (Тур) - тройной салют!
+                      // Тройной салют для глобальных покупок
                       _confettiController.play();
                       Future.delayed(const Duration(milliseconds: 300), () => _confettiController.play());
                       Future.delayed(const Duration(milliseconds: 600), () => _confettiController.play());
                     } else {
-                      // Для обычных продуктов - один салют
+                      // Обычный салют
                       _confettiController.play();
                     }
                   }
@@ -158,7 +158,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
           ],
         ),
       ),
-      body: Stack( // Используем Stack, чтобы салют был поверх списка
+      body: Stack(
         children: [
           TabBarView(
             controller: _tabController,
@@ -168,15 +168,15 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
               _buildPurchaseList('global'),
             ],
           ),
-          // Виджет салюта
+          // Слой для салюта
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
               confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive, // Взрыв во все стороны
+              blastDirectionality: BlastDirectionality.explosive,
               shouldLoop: false,
               colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
-              createParticlePath: drawStar, // Рисуем звездочки!
+              createParticlePath: drawStar,
             ),
           ),
         ],
@@ -188,9 +188,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
     );
   }
 
-  // Функция для рисования звездочек в салюте
+  // Функция для рисования звездочек
   Path drawStar(Size size) {
-    double degToRad(double deg) => deg * (3.141592653589793 / 180.0);
+    double degToRad(double deg) => deg * (pi / 180.0);
     const numberOfPoints = 5;
     final halfWidth = size.width / 2;
     final externalRadius = halfWidth;
@@ -210,8 +210,4 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
     path.close();
     return path;
   }
-
-  // Вспомогательные математические функции
-  double cos(double radians) => (radians == 0) ? 1.0 : (radians == 3.141592653589793) ? -1.0 : (radians == 1.5707963267948966) ? 0.0 : 1.0; // Упрощенно для компиляции (на самом деле используется dart:math)
-  double sin(double radians) => (radians == 1.5707963267948966) ? 1.0 : (radians == 0) ? 0.0 : (radians == 3.141592653589793) ? 0.0 : 1.0;
 }
