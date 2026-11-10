@@ -23,7 +23,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
   void _showAddMemberDialog() {
     final nameController = TextEditingController();
-    String relation = 'Сын/Дочь';
+    final maidenController = TextEditingController();
+    String relation = 'Сын';
     String? photoPath;
     
     final relations = ['Муж', 'Жена', 'Сын', 'Дочь', 'Отец', 'Мать', 'Брат', 'Сестра', 'Бабушка', 'Дедушка'];
@@ -46,7 +47,17 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   },
                   icon: const Icon(Icons.photo_camera), label: const Text('Фото'),
                 ),
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Имя')),
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Имя и Фамилия')),
+                
+                // Поле для девичьей фамилии
+                TextField(
+                  controller: maidenController, 
+                  decoration: const InputDecoration(
+                    labelText: 'Девичья фамилия (если есть)',
+                    prefixIcon: Icon(Icons.female, color: Colors.pink, size: 20),
+                  ),
+                ),
+                
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: relation,
@@ -65,6 +76,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 final db = await DatabaseHelper.instance.database;
                 await db.insert('family_members', {
                   'name': nameController.text.trim(),
+                  'maiden_name': maidenController.text.trim().isEmpty ? null : maidenController.text.trim(),
                   'relation': relation,
                   'photo_path': photoPath,
                 });
@@ -88,7 +100,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           : GridView.builder(
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+                crossAxisCount: 2, // Две колонки
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
               ),
@@ -96,14 +108,39 @@ class _FamilyScreenState extends State<FamilyScreen> {
               itemBuilder: (context, index) {
                 final member = _members[index];
                 return Card(
+                  elevation: 2,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // Аватарка
                       if (member['photo_path'] != null && File(member['photo_path']).existsSync())
                         CircleAvatar(radius: 40, backgroundImage: FileImage(File(member['photo_path']))),
                       const SizedBox(height: 8),
-                      Text(member['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text(member['relation'], style: const TextStyle(color: Colors.grey)),
+                      
+                      // Имя
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: Text(
+                          member['name'], 
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      
+                      // Девичья фамилия (если есть)
+                      if (member['maiden_name'] != null && member['maiden_name'].toString().isNotEmpty)
+                        Text(
+                          '(${member['maiden_name']})', 
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                        
+                      // Кем является (Муж, Жена и т.д.)
+                      Text(
+                        member['relation'], 
+                        style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
+                      ),
                     ],
                   ),
                 );
