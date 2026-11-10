@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
+import 'screens/registration_screen.dart';
 
 void main() {
   runApp(const FamilyListsApp());
@@ -15,7 +16,9 @@ class FamilyListsApp extends StatefulWidget {
 
 class _FamilyListsAppState extends State<FamilyListsApp> {
   bool _isDarkMode = false;
-  double _fontSize = 1.0; // Коэффициент шрифта
+  double _fontSize = 1.0;
+  bool _isLoading = true;
+  bool _isRegistered = false; // Прошел ли регистрацию
 
   @override
   void initState() {
@@ -28,28 +31,30 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
     setState(() {
       _isDarkMode = prefs.getBool('isDarkMode') ?? false;
       _fontSize = prefs.getDouble('fontSize') ?? 1.0;
+      // Проверяем, есть ли сохраненное имя (значит регистрация пройдена)
+      _isRegistered = prefs.getString('my_name') != null;
+      _isLoading = false;
     });
   }
 
   void toggleTheme(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', value);
-    setState(() {
-      _isDarkMode = value;
-    });
+    setState(() => _isDarkMode = value);
   }
 
-  // Функция для смены шрифта из настроек
   void changeFontSize(double value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('fontSize', value);
-    setState(() {
-      _fontSize = value;
-    });
+    setState(() => _fontSize = value);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+    }
+
     return MaterialApp(
       title: 'Семейные списки',
       debugShowCheckedModeBanner: false,
@@ -64,19 +69,20 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
         brightness: Brightness.dark,
       ),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      // Оборачиваем в MediaQuery, чтобы менять размер текста во всем приложении
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(_fontSize), // Применяем масштаб
-          ),
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(_fontSize)),
           child: child!,
         );
       },
-      home: HomeScreen(
-        onThemeChanged: toggleTheme,
-        onFontSizeChanged: changeFontSize, // Передаем функцию шрифта
-      ),
+      // Если не зарегистрирован — показываем Экран Регистрации
+      home: _isRegistered 
+          ? HomeScreen(onThemeChanged: toggleTheme, onFontSizeChanged: changeFontSize)
+          : RegistrationScreen(
+              onRegistrationComplete: () {
+                setState(() => _isRegistered = true); // Переключаем на главный экран
+              },
+            ),
     );
   }
 }
