@@ -19,7 +19,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String? _photoPath;
 
   Future<void> _pickDate() async {
-    DateTime initialDate = DateTime.now().subtract(const Duration(days: 365 * 25)); // По умолчанию 25 лет
+    // Скрываем клавиатуру, чтобы не мешала календарю
+    FocusScope.of(context).unfocus();
+    
+    DateTime initialDate = DateTime.now().subtract(const Duration(days: 365 * 25));
     if (_dateController.text.isNotEmpty) {
       try {
         final parts = _dateController.text.split('-');
@@ -45,21 +48,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
-    // Сохраняем "Мой профиль" в настройки телефона
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('my_name', _nameController.text.trim());
     await prefs.setString('my_date', _dateController.text.trim());
     if (_photoPath != null) await prefs.setString('my_photo', _photoPath!);
 
-    // Добавляем себя в общую таблицу семьи (чтобы видеть себя в списке)
     final db = await DatabaseHelper.instance.database;
     await db.insert('family_members', {
       'name': _nameController.text.trim(),
-      'relation': 'Я', // Или "Глава семьи"
+      'relation': 'Я',
       'photo_path': _photoPath,
     });
 
-    widget.onRegistrationComplete(); // Говорим приложению, что регистрация пройдена
+    widget.onRegistrationComplete();
   }
 
   @override
@@ -106,15 +107,20 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 decoration: const InputDecoration(labelText: 'Ваше Имя и Фамилия', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: _dateController,
-                decoration: InputDecoration(
-                  labelText: 'Дата рождения',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(icon: const Icon(Icons.calendar_today), onPressed: _pickDate),
+              
+              // ИСПРАВЛЕННОЕ ПОЛЕ ДАТЫ
+              GestureDetector(
+                onTap: _pickDate, // Вызываем календарь при нажатии на всю область
+                child: AbsorbPointer( // Блокируем ввод с клавиатуры, чтобы не было конфликтов
+                  child: TextField(
+                    controller: _dateController,
+                    decoration: const InputDecoration(
+                      labelText: 'Дата рождения',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today), // Иконка календаря для красоты
+                    ),
+                  ),
                 ),
-                readOnly: true,
-                onTap: _pickDate,
               ),
               
               const SizedBox(height: 32),
