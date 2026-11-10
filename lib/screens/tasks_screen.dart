@@ -17,15 +17,13 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   List<Task> _allTasks = [];
   List<String> _categories = [];
   late TabController _tabController;
-  
-  // Контроллер для салюта
   late ConfettiController _confettiController;
 
   @override
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 4, vsync: this); 
-    _confettiController = ConfettiController(duration: const Duration(seconds: 2)); // Салют на 2 секунды
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2)); 
     _loadData(); 
   }
 
@@ -63,43 +61,57 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     _loadData();
   }
 
+  // ИСПРАВЛЕННАЯ ФИЛЬТРАЦИЯ
   List<Task> _getFilteredTasks(String filter) {
     final now = DateTime.now();
-    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-    final nextWeek = now.add(const Duration(days: 7));
+    final today = DateTime(now.year, now.month, now.day);
+    final nextWeek = today.add(const Duration(days: 7));
 
     List<Task> filtered = _allTasks.where((t) {
+      // Если задача выполнена, мы не показываем ее в "Сегодня" и "На неделе", 
+      // но показываем в "Все" и "Регулярные"
+      if (filter != 'all' && filter != 'regular' && t.isCompleted) {
+        return false;
+      }
+
+      // Логика по вкладкам
       if (filter == 'today') {
-        if (t.isCompleted) return false;
+        // 1. Ежедневные задачи всегда в "Сегодня"
         if (t.periodicity == 'Ежедневно') return true;
         
+        // 2. Разовые задачи, если дедлайн сегодня или просрочен
         if (t.dueDate != null) {
            final due = DateTime.parse(t.dueDate!);
-           final today = DateTime.now();
-           final diff = due.difference(DateTime(today.year, today.month, today.day)).inDays;
+           // Если дата дедлайна совпадает с сегодняшней
+           if (due.year == today.year && due.month == today.month && due.day == today.day) return true;
            
+           // Для счетчиков показываем за 2 дня до дедлайна
            if (t.readingValue != null) {
-             if (diff <= 2 && diff >= 0) return true; 
-           } else {
-             if (diff == 0) return true;
+             final diff = due.difference(today).inDays;
+             if (diff >= 0 && diff <= 2) return true;
            }
         }
         return false;
-      } else if (filter == 'week') {
-        if (t.isCompleted) return false;
-        if (t.periodicity == 'Ежедневно') return false; 
+      } 
+      else if (filter == 'week') {
+        if (t.periodicity == 'Ежедневно') return false; // Ежедневные не дублируем тут
         if (t.dueDate != null) {
           final due = DateTime.parse(t.dueDate!);
-          if (due.isAfter(now) && due.isBefore(nextWeek)) return true;
+          // Показываем, если дедлайн в ближайшие 7 дней
+          return due.isAfter(today.subtract(const Duration(days: 1))) && due.isBefore(nextWeek);
         }
         return false;
-      } else if (filter == 'regular') {
-        if (t.periodicity == 'Ежедневно' || t.periodicity == 'Ежемесячно' || t.periodicity == 'Ежегодно') return true;
-        return false;
+      } 
+      else if (filter == 'regular') {
+        // Сюда попадают все повторяющиеся дела
+        return t.periodicity == 'Ежедневно' || t.periodicity == 'Ежемесячно' || t.periodicity == 'Ежегодно';
       }
+      
+      // Для 'all' показываем всё
       return true; 
     }).toList();
 
+    // Сортировка: невыполненные сверху
     filtered.sort((a, b) {
       if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
       return a.title.compareTo(b.title);
@@ -149,18 +161,14 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             task.isCompleted = !task.isCompleted;
             await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
             
-            // ЗАПУСК САЛЮТА при выполнении дела
             if (task.isCompleted) {
               if (task.readingValue != null) {
-                // Двойной салют для счетчиков (важное событие!)
                 _confettiController.play();
                 Future.delayed(const Duration(milliseconds: 300), () => _confettiController.play());
               } else {
-                // Обычный салют для дел
                 _confettiController.play();
               }
             }
-            
             _loadData();
           },
           onEdit: () => _openAddEdit(task: task),
@@ -209,7 +217,6 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
               _buildTaskList('regular'),
             ],
           ),
-          // Слой для салюта
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -229,7 +236,6 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     );
   }
 
-  // Функция для рисования звездочек
   Path drawStar(Size size) {
     double degToRad(double deg) => deg * (pi / 180.0);
     const numberOfPoints = 5;
@@ -243,10 +249,8 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     path.moveTo(size.width, halfWidth);
 
     for (double step = 0; step < fullAngle; step += degreesPerStep) {
-      path.lineTo(halfWidth + externalRadius * cos(step - halfWidth),
-          halfWidth + externalRadius * sin(step - halfWidth));
-      path.lineTo(halfWidth + internalRadius * cos(step + halfDegreesPerStep - halfWidth),
-          halfWidth + internalRadius * sin(step + halfDegreesPerStep - halfWidth));
+      path.lineTo(halfWidth + externalRadius * cos(step - halfWidth), halfWidth + externalRadius * sin(step - halfWidth));
+      path.lineTo(halfWidth + internalRadius * cos(step + halfDegreesPerStep - halfWidth), halfWidth + internalRadius * sin(step + halfDegreesPerStep - halfWidth));
     }
     path.close();
     return path;
