@@ -6,9 +6,14 @@ import 'gifts_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final Function(bool) onThemeChanged; // Принимаем функцию
+  final Function(bool) onThemeChanged;
+  final Function(double) onFontSizeChanged; // Новая функция
 
-  const HomeScreen({super.key, required this.onThemeChanged});
+  const HomeScreen({
+    super.key, 
+    required this.onThemeChanged,
+    required this.onFontSizeChanged,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -24,7 +29,10 @@ class _HomeScreenState extends State<HomeScreen> {
       const PurchasesScreen(),
       const BirthdaysScreen(),
       const GiftsScreen(),
-      SettingsScreen(onThemeChanged: widget.onThemeChanged), // Передаем в настройки
+      SettingsScreen(
+        onThemeChanged: widget.onThemeChanged,
+        onFontSizeChanged: widget.onFontSizeChanged, // Передаем дальше
+      ),
     ];
 
     return Scaffold(
