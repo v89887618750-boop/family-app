@@ -3,7 +3,7 @@ import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../widgets/item_tile.dart';
 import 'add_edit_screen.dart';
-import 'meter_stats_screen.dart'; // Импортируем экран статистики
+import 'meter_stats_screen.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
@@ -19,7 +19,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   @override
   void initState() { 
     super.initState(); 
-    _tabController = TabController(length: 4, vsync: this); // 4 вкладки
+    _tabController = TabController(length: 4, vsync: this); 
     _loadData(); 
   }
 
@@ -130,9 +130,8 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           subtitle: subtitle,
           isCompleted: task.isCompleted,
           isOverdue: isOverdue,
-          readingValue: task.readingValue, // Передаем показания
+          readingValue: task.readingValue,
           onShowStats: task.readingValue != null ? () {
-            // Переход на экран статистики
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -174,20 +173,20 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           isScrollable: true,
           indicatorColor: Colors.white,
           tabs: const [
-            Tab(text: 'Сегодня'),
-            Tab(text: 'На неделе'),
-            Tab(text: 'Регулярные'),
-            Tab(text: 'Все'),
+            Tab(text: 'Все'),          // <-- Теперь первая вкладка
+            Tab(text: 'Сегодня'),      // <-- Вторая
+            Tab(text: 'На неделе'),    // <-- Третья
+            Tab(text: 'Регулярные'),   // <-- Четвертая
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildTaskList('today'),
+          _buildTaskList('all'),      // <-- Первым передаем 'all'
+          _buildTaskList('today'),    // <-- Затем 'today'
           _buildTaskList('week'),
           _buildTaskList('regular'),
-          _buildTaskList('all'),
         ],
       ),
       floatingActionButton: FloatingActionButton(
