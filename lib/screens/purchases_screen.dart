@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
 import '../models/purchase.dart';
 import 'add_edit_screen.dart';
@@ -15,8 +16,6 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
   List<Purchase> _allPurchases = [];
   List<String> _categories = [];
   late TabController _tabController;
-  
-  // Контроллер для салюта
   late ConfettiController _confettiController;
 
   @override
@@ -61,6 +60,25 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
     _loadData();
   }
 
+  Future<void> _confirmDelete(Purchase item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить?'),
+        content: Text('Удалить "${item.title}" из списка покупок?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final db = await DatabaseHelper.instance.database;
+      await db.delete('purchases', where: 'id = ?', whereArgs: [item.id]);
+      _loadData();
+    }
+  }
+
   List<Purchase> _getFilteredPurchases(String filter) {
     List<Purchase> filtered = _allPurchases.where((p) {
       if (filter == 'today') {
@@ -77,7 +95,6 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
       if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
       return a.title.compareTo(b.title);
     });
-
     return filtered;
   }
 
@@ -91,39 +108,40 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
-        return Dismissible(
+        return Slidable(
           key: Key(item.id.toString()),
-          direction: DismissDirection.endToStart,
-          background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
-          onDismissed: (_) async {
-            final db = await DatabaseHelper.instance.database;
-            await db.delete('purchases', where: 'id = ?', whereArgs: [item.id]);
-            _loadData();
-          },
+          endActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            extentRatio: 0.25,
+            children: [
+              SlidableAction(
+                onPressed: (context) => _confirmDelete(item), // ВЫЗОВ ПОДТВЕРЖДЕНИЯ
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                icon: Icons.delete,
+                label: 'Удалить',
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ],
+          ),
           child: Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
-              onTap: () => _openAddEdit(item: item),
+              onTap: () => _openAddEdit(item: item), // ОТКРЫТИЕ РЕДАКТОРА
               leading: Checkbox(
                 value: item.isCompleted,
                 onChanged: (_) async {
                   final db = await DatabaseHelper.instance.database;
                   item.isCompleted = !item.isCompleted;
                   await db.update('purchases', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
-                  
-                  // ЗАПУСК САЛЮТА
                   if (item.isCompleted) {
                     if (item.periodicity == 'Ежегодно') {
-                      // Тройной салют для глобальных покупок
                       _confettiController.play();
                       Future.delayed(const Duration(milliseconds: 300), () => _confettiController.play());
-                      Future.delayed(const Duration(milliseconds: 600), () => _confettiController.play());
                     } else {
-                      // Обычный салют
                       _confettiController.play();
                     }
                   }
-                  
                   _loadData();
                 },
               ),
@@ -144,31 +162,21 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
         actions: [
           IconButton(
             icon: const Icon(Icons.cleaning_services),
-            tooltip: 'Очистить купленное',
             onPressed: _allPurchases.any((p) => p.isCompleted) ? _clearCompleted : null,
           )
         ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
-          tabs: const [
-            Tab(text: 'В магазин'),
-            Tab(text: 'На неделе'),
-            Tab(text: 'Глобальные'),
-          ],
+          tabs: const [Tab(text: 'В магазин'), Tab(text: 'На неделе'), Tab(text: 'Глобальные')],
         ),
       ),
       body: Stack(
         children: [
           TabBarView(
             controller: _tabController,
-            children: [
-              _buildPurchaseList('today'),
-              _buildPurchaseList('week'),
-              _buildPurchaseList('global'),
-            ],
+            children: [_buildPurchaseList('today'), _buildPurchaseList('week'), _buildPurchaseList('global')],
           ),
-          // Слой для салюта
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -181,14 +189,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () => _openAddEdit(),
-      ),
+      floatingActionButton: FloatingActionButton(child: const Icon(Icons.add), onPressed: () => _openAddEdit()),
     );
   }
 
-  // Функция для рисования звездочек
   Path drawStar(Size size) {
     double degToRad(double deg) => deg * (pi / 180.0);
     const numberOfPoints = 5;
@@ -202,10 +206,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
     path.moveTo(size.width, halfWidth);
 
     for (double step = 0; step < fullAngle; step += degreesPerStep) {
-      path.lineTo(halfWidth + externalRadius * cos(step - halfWidth),
-          halfWidth + externalRadius * sin(step - halfWidth));
-      path.lineTo(halfWidth + internalRadius * cos(step + halfDegreesPerStep - halfWidth),
-          halfWidth + internalRadius * sin(step + halfDegreesPerStep - halfWidth));
+      path.lineTo(halfWidth + externalRadius * cos(step - halfWidth), halfWidth + externalRadius * sin(step - halfWidth));
+      path.lineTo(halfWidth + internalRadius * cos(step + halfDegreesPerStep - halfWidth), halfWidth + internalRadius * sin(step + halfDegreesPerStep - halfWidth));
     }
     path.close();
     return path;
