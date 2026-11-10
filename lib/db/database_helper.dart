@@ -16,8 +16,8 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    // Версия 7: добавлена таблица истории показаний счетчиков
-    return await openDatabase(path, version: 7, onCreate: _createDB, onUpgrade: _upgradeDB);
+    // Версия 8: добавлена таблица членов семьи
+    return await openDatabase(path, version: 8, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -51,7 +51,7 @@ class DatabaseHelper {
       photo_path TEXT
     )''');
 
-    // Таблица подарков (Wishlist)
+    // Таблица подарков
     await db.execute('''CREATE TABLE gifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, 
       title TEXT NOT NULL, 
@@ -76,6 +76,16 @@ class DatabaseHelper {
       date TEXT NOT NULL,
       FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
     )''');
+
+    // НОВАЯ ТАБЛИЦА: Члены семьи
+    await db.execute('''CREATE TABLE family_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      relation TEXT NOT NULL,
+      birthday_id INTEGER,
+      photo_path TEXT,
+      FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
+    )''');
     
     // Добавляем базовые категории
     for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
@@ -88,25 +98,15 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE birthdays ADD COLUMN remind_days INTEGER DEFAULT 1');
     }
     if (oldVersion < 4) {
-      try {
-        await db.execute('ALTER TABLE birthdays ADD COLUMN photo_path TEXT');
-      } catch (e) {}
-      try {
-        await db.execute('ALTER TABLE gifts ADD COLUMN note TEXT');
-      } catch (e) {}
-      try {
-        await db.execute('ALTER TABLE gifts ADD COLUMN photo_path TEXT');
-      } catch (e) {}
+      try { await db.execute('ALTER TABLE birthdays ADD COLUMN photo_path TEXT'); } catch (e) {}
+      try { await db.execute('ALTER TABLE gifts ADD COLUMN note TEXT'); } catch (e) {}
+      try { await db.execute('ALTER TABLE gifts ADD COLUMN photo_path TEXT'); } catch (e) {}
     }
     if (oldVersion < 5) {
-      try {
-        await db.execute('ALTER TABLE tasks ADD COLUMN due_date TEXT');
-      } catch (e) {}
+      try { await db.execute('ALTER TABLE tasks ADD COLUMN due_date TEXT'); } catch (e) {}
     }
     if (oldVersion < 6) {
-      try {
-        await db.execute('ALTER TABLE tasks ADD COLUMN reading_value TEXT');
-      } catch (e) {}
+      try { await db.execute('ALTER TABLE tasks ADD COLUMN reading_value TEXT'); } catch (e) {}
     }
     if (oldVersion < 7) {
       await db.execute('''CREATE TABLE meter_readings (
@@ -115,6 +115,17 @@ class DatabaseHelper {
         reading_value REAL NOT NULL,
         date TEXT NOT NULL,
         FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+      )''');
+    }
+    // ОБНОВЛЕНИЕ ДО ВЕРСИИ 8 (Члены семьи)
+    if (oldVersion < 8) {
+      await db.execute('''CREATE TABLE family_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        relation TEXT NOT NULL,
+        birthday_id INTEGER,
+        photo_path TEXT,
+        FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
       )''');
     }
   }
