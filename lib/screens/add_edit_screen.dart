@@ -5,7 +5,7 @@ import '../models/purchase.dart';
 
 class AddEditScreen extends StatefulWidget {
   final String type;
-  final dynamic item;
+  final dynamic item; // Сюда передается покупка или дело
   final List<String> categories;
 
   const AddEditScreen({super.key, required this.type, this.item, required this.categories});
@@ -20,16 +20,12 @@ class _AddEditScreenState extends State<AddEditScreen> {
   String _periodicity = 'Разово';
   DateTime? _dueDate;
   
-  // Переменные для счетчиков
   bool _isMeter = false;
   final _readingController = TextEditingController();
   int _remindDays = 1;
-  
   final List<String> _homeCategories = ['Дом', 'Коммуналка', 'Быт']; 
-  
   final List<String> _periodicities = ['Ежедневно', 'Ежемесячно', 'Ежегодно', 'Разово'];
 
-  // Для покупок: приоритеты
   final List<Map<String, String>> _purchasePriorities = [
     {'label': 'Купить сегодня', 'value': 'Разово', 'icon': '🛒'},
     {'label': 'На этой неделе', 'value': 'Ежемесячно', 'icon': '📅'},
@@ -43,11 +39,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _titleController.text = widget.item.title;
       _selectedCategory = widget.item.category;
       _periodicity = widget.item.periodicity;
-      
       if (widget.item.dueDate != null) {
-        _dueDate = DateTime.parse(widget.item.dueDate);
+        _dueDate = DateTime.tryParse(widget.item.dueDate);
       }
-      
       if (widget.type == 'task' && widget.item.readingValue != null) {
         _isMeter = true;
         _readingController.text = widget.item.readingValue;
@@ -58,7 +52,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   }
 
   Future<void> _save() async {
-    if (_titleController.text.isEmpty) return;
+    if (_titleController.text.trim().isEmpty) return;
     final db = await DatabaseHelper.instance.database;
     
     String? dateToSave;
@@ -66,15 +60,14 @@ class _AddEditScreenState extends State<AddEditScreen> {
       dateToSave = null; 
     } else if (_periodicity == 'Ежемесячно') {
       final now = DateTime.now();
-      // Если дата выбрана, берем её день. Если нет - сегодняшний.
-      int day = _dueDate?.day ?? now.day; 
+      int day = _dueDate?.day ?? now.day;
       dateToSave = "${now.year}-${now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
     } else {
       dateToSave = _dueDate != null ? _dueDate!.toIso8601String().split('T')[0] : null;
     }
 
     final data = {
-      'title': _titleController.text,
+      'title': _titleController.text.trim(),
       'category': _selectedCategory,
       'periodicity': _periodicity,
       'isCompleted': widget.item?.isCompleted == true ? 1 : 0,
@@ -102,14 +95,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
       }
     } else {
       await db.update(widget.type == 'task' ? 'tasks' : 'purchases', data, where: 'id = ?', whereArgs: [widget.item.id]);
-      
-      if (widget.type == 'task' && _isMeter && _readingController.text.isNotEmpty && _readingController.text != widget.item.readingValue) {
-         await db.insert('meter_readings', {
-            'task_id': widget.item.id,
-            'reading_value': double.tryParse(_readingController.text.replaceAll(',', '.')) ?? 0.0,
-            'date': DateTime.now().toIso8601String(),
-          });
-      }
     }
     if (mounted) Navigator.pop(context, true);
   }
@@ -160,7 +145,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
               const SizedBox(height: 16),
 
-              // Выбор даты теперь показывается ВСЕГДА (и для счетчиков тоже!)
               if (widget.type == 'task' && _periodicity != 'Ежедневно')
                 ListTile(
                   title: Text(_dueDate == null ? 'Установить дату (дедлайн)' : 'Дедлайн: ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year}'),
@@ -181,7 +165,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 const Divider(),
                 SwitchListTile(
                   title: const Text('Это показания счетчика?', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Создаст задачу с напоминанием и полем для ввода цифр'),
                   value: _isMeter,
                   activeColor: Colors.teal,
                   onChanged: (v) => setState(() => _isMeter = v),
