@@ -1,4 +1,6 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:confetti/confetti.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../widgets/item_tile.dart';
@@ -15,17 +17,22 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   List<Task> _allTasks = [];
   List<String> _categories = [];
   late TabController _tabController;
+  
+  // Контроллер для салюта
+  late ConfettiController _confettiController;
 
   @override
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 4, vsync: this); 
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2)); // Салют на 2 секунды
     _loadData(); 
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -56,7 +63,6 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     _loadData();
   }
 
-  // Фильтрация задач
   List<Task> _getFilteredTasks(String filter) {
     final now = DateTime.now();
     final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
@@ -73,7 +79,6 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
            final diff = due.difference(DateTime(today.year, today.month, today.day)).inDays;
            
            if (t.readingValue != null) {
-             // Если это счетчик, показываем за 2 дня до подачи
              if (diff <= 2 && diff >= 0) return true; 
            } else {
              if (diff == 0) return true;
@@ -143,6 +148,19 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             final db = await DatabaseHelper.instance.database;
             task.isCompleted = !task.isCompleted;
             await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
+            
+            // ЗАПУСК САЛЮТА при выполнении дела
+            if (task.isCompleted) {
+              if (task.readingValue != null) {
+                // Двойной салют для счетчиков (важное событие!)
+                _confettiController.play();
+                Future.delayed(const Duration(milliseconds: 300), () => _confettiController.play());
+              } else {
+                // Обычный салют для дел
+                _confettiController.play();
+              }
+            }
+            
             _loadData();
           },
           onEdit: () => _openAddEdit(task: task),
@@ -173,20 +191,35 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           isScrollable: true,
           indicatorColor: Colors.white,
           tabs: const [
-            Tab(text: 'Все'),          // <-- Теперь первая вкладка
-            Tab(text: 'Сегодня'),      // <-- Вторая
-            Tab(text: 'На неделе'),    // <-- Третья
-            Tab(text: 'Регулярные'),   // <-- Четвертая
+            Tab(text: 'Все'),          
+            Tab(text: 'Сегодня'),      
+            Tab(text: 'На неделе'),    
+            Tab(text: 'Регулярные'),   
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Stack(
         children: [
-          _buildTaskList('all'),      // <-- Первым передаем 'all'
-          _buildTaskList('today'),    // <-- Затем 'today'
-          _buildTaskList('week'),
-          _buildTaskList('regular'),
+          TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTaskList('all'),      
+              _buildTaskList('today'),    
+              _buildTaskList('week'),
+              _buildTaskList('regular'),
+            ],
+          ),
+          // Слой для салюта
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+              createParticlePath: drawStar,
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -194,5 +227,28 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
         onPressed: () => _openAddEdit(),
       ),
     );
+  }
+
+  // Функция для рисования звездочек
+  Path drawStar(Size size) {
+    double degToRad(double deg) => deg * (pi / 180.0);
+    const numberOfPoints = 5;
+    final halfWidth = size.width / 2;
+    final externalRadius = halfWidth;
+    final internalRadius = halfWidth / 2.5;
+    final degreesPerStep = degToRad(360 / numberOfPoints);
+    final halfDegreesPerStep = degreesPerStep / 2;
+    final path = Path();
+    final fullAngle = degToRad(360);
+    path.moveTo(size.width, halfWidth);
+
+    for (double step = 0; step < fullAngle; step += degreesPerStep) {
+      path.lineTo(halfWidth + externalRadius * cos(step - halfWidth),
+          halfWidth + externalRadius * sin(step - halfWidth));
+      path.lineTo(halfWidth + internalRadius * cos(step + halfDegreesPerStep - halfWidth),
+          halfWidth + internalRadius * sin(step + halfDegreesPerStep - halfWidth));
+    }
+    path.close();
+    return path;
   }
 }
