@@ -17,31 +17,33 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _surnameController = TextEditingController();
   final _nameController = TextEditingController();
   final _patronymicController = TextEditingController();
-  final _maidenNameController = TextEditingController(); // Девичья фамилия
+  final _maidenNameController = TextEditingController();
   final _dateController = TextEditingController();
   String? _photoPath;
 
-  Future<void> _pickDate() async {
-    FocusScope.of(context).unfocus();
+  // Вызов календаря через BottomSheet
+  void _pickDate() {
+    FocusScope.of(context).unfocus(); // Убираем клавиатуру
     
-    DateTime initialDate = DateTime.now().subtract(const Duration(days: 365 * 25));
-    if (_dateController.text.isNotEmpty) {
-      try {
-        final parts = _dateController.text.split('-');
-        if (parts.length == 3) initialDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-      } catch (e) {}
-    }
-
-    final picked = await showDatePicker(
+    showModalBottomSheet(
       context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      locale: const Locale('ru', 'RU'),
+      builder: (BuildContext context) {
+        return SizedBox(
+          height: 350,
+          child: CalendarDatePicker(
+            initialDate: DateTime.now().subtract(const Duration(days: 365 * 25)),
+            firstDate: DateTime(1900),
+            lastDate: DateTime.now(),
+            onDateChanged: (DateTime picked) {
+              setState(() {
+                _dateController.text = DateFormat('dd-MM-yyyy').format(picked);
+              });
+              Navigator.pop(context); // Закрываем календарь после выбора
+            },
+          ),
+        );
+      },
     );
-    if (picked != null) {
-      setState(() => _dateController.text = DateFormat('dd-MM-yyyy').format(picked));
-    }
   }
 
   Future<void> _saveProfile() async {
@@ -139,16 +141,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Девичья фамилия (добавил, так как на скриншоте она есть)
+              // Девичья фамилия
               TextField(
                 controller: _maidenNameController,
                 decoration: const InputDecoration(labelText: 'Девичья фамилия (если есть)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               
-              // Поле даты (теперь это кнопка, а не текстовое поле)
+              // Поле даты
               InkWell(
-                onTap: _pickDate, // При нажатии вызываем календарь
+                onTap: _pickDate,
                 child: InputDecorator(
                   decoration: const InputDecoration(
                     labelText: 'Дата рождения',
