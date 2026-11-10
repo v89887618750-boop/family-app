@@ -66,7 +66,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
       dateToSave = null; 
     } else if (_periodicity == 'Ежемесячно') {
       final now = DateTime.now();
-      int day = _dueDate?.day ?? now.day;
+      // Если дата выбрана, берем её день. Если нет - сегодняшний.
+      int day = _dueDate?.day ?? now.day; 
       dateToSave = "${now.year}-${now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
     } else {
       dateToSave = _dueDate != null ? _dueDate!.toIso8601String().split('T')[0] : null;
@@ -101,6 +102,14 @@ class _AddEditScreenState extends State<AddEditScreen> {
       }
     } else {
       await db.update(widget.type == 'task' ? 'tasks' : 'purchases', data, where: 'id = ?', whereArgs: [widget.item.id]);
+      
+      if (widget.type == 'task' && _isMeter && _readingController.text.isNotEmpty && _readingController.text != widget.item.readingValue) {
+         await db.insert('meter_readings', {
+            'task_id': widget.item.id,
+            'reading_value': double.tryParse(_readingController.text.replaceAll(',', '.')) ?? 0.0,
+            'date': DateTime.now().toIso8601String(),
+          });
+      }
     }
     if (mounted) Navigator.pop(context, true);
   }
@@ -125,7 +134,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Если это ПОКУПКА - показываем кнопки приоритета
               if (widget.type == 'purchase') ...[
                 const Text('Когда планируем купить?', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -142,7 +150,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   }).toList(),
                 ),
               ] else ...[
-                // Если это ДЕЛО - стандартный выбор периодичности
                 DropdownButtonFormField<String>(
                   value: _periodicity,
                   decoration: const InputDecoration(labelText: 'Периодичность'),
@@ -153,8 +160,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
               const SizedBox(height: 16),
 
-              // Выбор даты (только для дел, не для счетчиков и не для разовых)
-              if (widget.type == 'task' && _periodicity != 'Ежедневно' && !_isMeter)
+              // Выбор даты теперь показывается ВСЕГДА (и для счетчиков тоже!)
+              if (widget.type == 'task' && _periodicity != 'Ежедневно')
                 ListTile(
                   title: Text(_dueDate == null ? 'Установить дату (дедлайн)' : 'Дедлайн: ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year}'),
                   leading: const Icon(Icons.calendar_today),
@@ -170,7 +177,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   },
                 ),
               
-              // Блок счетчиков
               if (widget.type == 'task' && _homeCategories.contains(_selectedCategory)) ...[
                 const Divider(),
                 SwitchListTile(
