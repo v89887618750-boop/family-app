@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart'; // Добавили для форматирования даты
 import '../db/database_helper.dart';
 import '../models/birthday.dart';
 import 'gifts_screen.dart';
@@ -29,6 +30,34 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
     int remindDays = item?.remindDays ?? 1;
     String? photoPath = item?.photoPath;
 
+    // Функция для открытия календаря
+    Future<void> pickDate() async {
+      DateTime initialDate = DateTime.now();
+      // Пытаемся распарсить текущую введенную дату
+      if (dateController.text.isNotEmpty) {
+        try {
+          final parts = dateController.text.replaceAll('.', '-').split('-');
+          if (parts.length == 3) {
+            initialDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          }
+        } catch (e) {}
+      }
+
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: DateTime(1900),
+        lastDate: DateTime.now(),
+        locale: const Locale('ru', 'RU'), // Русский язык в календаре
+      );
+      
+      if (picked != null) {
+        // Форматируем в ДД-ММ-ГГГГ
+        String formattedDate = DateFormat('dd-MM-yyyy').format(picked);
+        dateController.text = formattedDate;
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -39,7 +68,7 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (photoPath != null) 
-                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath!))),
+                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath))),
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -50,7 +79,25 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Имя')),
-                TextField(controller: dateController, decoration: const InputDecoration(labelText: 'Дата (ДД-ММ-ГГГГ)', hintText: 'Например: 18-01-1991')),
+                
+                // Поле ввода даты с кнопкой календаря
+                TextField(
+                  controller: dateController, 
+                  decoration: InputDecoration(
+                    labelText: 'Дата рождения',
+                    hintText: 'ДД-ММ-ГГГГ',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.calendar_month, color: Colors.teal),
+                      onPressed: pickDate,
+                    ),
+                  ),
+                  keyboardType: TextInputType.datetime,
+                  onTap: () {
+                    // При нажатии на поле тоже открываем календарь
+                    pickDate();
+                  },
+                ),
+                
                 const SizedBox(height: 16),
                 DropdownButtonFormField<int>(
                   value: remindDays,
@@ -65,11 +112,30 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.isEmpty || dateController.text.isEmpty) return;
+                String cleanName = nameController.text.trim();
+                // Меняем точки на дефисы на случай, если ввели вручную
+                String cleanDate = dateController.text.trim().replaceAll('.', '-');
+
+                if (cleanName.isEmpty || cleanDate.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Пожалуйста, заполните Имя и Дату')),
+                  );
+                  return;
+                }
+                
+                // Простая проверка на формат
+                final parts = cleanDate.split('-');
+                if (parts.length != 3) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Дата должна быть в формате ДД-ММ-ГГГГ')),
+                  );
+                  return;
+                }
+
                 final db = await DatabaseHelper.instance.database;
                 final bday = Birthday(
-                  name: nameController.text, 
-                  date: dateController.text, 
+                  name: cleanName, 
+                  date: cleanDate, 
                   category: 'Семья', 
                   remindDays: remindDays,
                   photoPath: photoPath
@@ -91,24 +157,18 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
     );
   }
 
-    String _getBirthdayStatus(String dateStr) {
+  String _getBirthdayStatus(String dateStr) {
     try {
       final parts = dateStr.split('-');
       if (parts.length != 3) return 'Неверный формат';
       final now = DateTime.now();
-      
-      // Дата рождения в текущем году
       DateTime nextBday = DateTime(now.year, int.parse(parts[1]), int.parse(parts[0]));
       
-      // Если ДР в этом году уже прошел, переносим на следующий год
       if (nextBday.isBefore(DateTime(now.year, now.month, now.day))) {
         nextBday = DateTime(now.year + 1, nextBday.month, nextBday.day);
       }
       
-      // Считаем, сколько лет исполнится
       int age = nextBday.year - int.parse(parts[2]);
-      
-      // Считаем дни до праздника
       final diff = nextBday.difference(DateTime(now.year, now.month, now.day)).inDays;
       
       if (diff == 0) return '🎉 Сегодня ($age лет)!';
