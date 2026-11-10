@@ -5,8 +5,9 @@ import '../db/database_helper.dart';
 
 class SettingsScreen extends StatefulWidget {
   final Function(bool) onThemeChanged;
+  final Function(double) onFontSizeChanged;
 
-  const SettingsScreen({super.key, required this.onThemeChanged});
+  const SettingsScreen({super.key, required this.onThemeChanged, required this.onFontSizeChanged});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -44,17 +45,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(category == null ? 'Новая категория' : 'Изменить название'),
-        content: TextField(
-          controller: controller, 
-          decoration: const InputDecoration(labelText: 'Название')
-        ),
+        content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Название')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
           ElevatedButton(
             onPressed: () async {
               if (controller.text.trim().isEmpty) return;
               final db = await DatabaseHelper.instance.database;
-              
               if (category == null) {
                 await db.insert('categories', {'name': controller.text.trim()}, conflictAlgorithm: ConflictAlgorithm.ignore);
               } else {
@@ -73,22 +70,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _deleteCategory(Map<String, dynamic> category) async {
     final catName = category['name'];
     final db = await DatabaseHelper.instance.database;
-
     final tasksCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM tasks WHERE category = ?', [catName])) ?? 0;
     final purchasesCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM purchases WHERE category = ?', [catName])) ?? 0;
 
     if (tasksCount > 0 || purchasesCount > 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Нельзя удалить "$catName". К ней привязано дел: $tasksCount, покупок: $purchasesCount.'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Нельзя удалить "$catName". К ней привязано дел: $tasksCount.'), backgroundColor: Colors.red),
         );
       }
       return;
     }
-
     await db.delete('categories', where: 'id = ?', whereArgs: [category['id']]);
     _loadCategories();
   }
@@ -109,7 +101,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               widget.onThemeChanged(val); 
             },
           ),
-          // ИСПРАВЛЕННЫЙ БЛОК С ШРИФТОМ
           ListTile(
             leading: const Icon(Icons.format_size),
             title: const Text('Размер шрифта'),
@@ -119,10 +110,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               max: 1.4,
               divisions: 3,
               label: _fontSize == 0.8 ? 'Мелкий' : _fontSize == 1.0 ? 'Обычный' : _fontSize == 1.2 ? 'Крупный' : 'Очень крупный',
-              onChanged: (val) async {
+              onChanged: (val) {
                 setState(() => _fontSize = val);
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setDouble('fontSize', val);
+                widget.onFontSizeChanged(val); // МЕНЯЕМ ШРИФТ ГЛОБАЛЬНО
               },
             ),
           ),
@@ -133,14 +123,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () => _showCategoryDialog(category: cat),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _deleteCategory(cat),
-                    ),
+                    IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _showCategoryDialog(category: cat)),
+                    IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteCategory(cat)),
                   ],
                 ),
               )),
