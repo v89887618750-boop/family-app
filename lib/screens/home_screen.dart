@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
 import 'tasks_screen.dart';
 import 'purchases_screen.dart';
-import 'birthdays_screen.dart';
+import 'family_screen.dart'; // <-- НОВЫЙ ИМПОРТ
 import 'gifts_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(bool) onThemeChanged;
-  final Function(double) onFontSizeChanged; // Новая функция
+  final Function(double) onFontSizeChanged;
 
-  const HomeScreen({
-    super.key, 
-    required this.onThemeChanged,
-    required this.onFontSizeChanged,
-  });
+  const HomeScreen({super.key, required this.onThemeChanged, required this.onFontSizeChanged});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -27,12 +23,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final screens = [
       const TasksScreen(),
       const PurchasesScreen(),
-      const BirthdaysScreen(),
+      const FamilyScreen(), // <-- ЭКРАН СЕМЬИ
       const GiftsScreen(),
-      SettingsScreen(
-        onThemeChanged: widget.onThemeChanged,
-        onFontSizeChanged: widget.onFontSizeChanged, // Передаем дальше
-      ),
+      SettingsScreen(onThemeChanged: widget.onThemeChanged, onFontSizeChanged: widget.onFontSizeChanged),
     ];
 
     return Scaffold(
@@ -47,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.task), label: 'Дела'),
           NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'Покупки'),
-          NavigationDestination(icon: Icon(Icons.cake), label: 'Дни рождения'),
+          NavigationDestination(icon: Icon(Icons.family_restroom), label: 'Семья'), // <-- Иконка семьи
           NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Подарки'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Настройки'),
         ],
