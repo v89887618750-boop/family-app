@@ -91,23 +91,26 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
     );
   }
 
-  String _getBirthdayStatus(String dateStr) {
+    String _getBirthdayStatus(String dateStr) {
     try {
       final parts = dateStr.split('-');
       if (parts.length != 3) return 'Неверный формат';
       final now = DateTime.now();
-      DateTime bdayDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
       
-      int age = now.year - bdayDate.year;
+      // Дата рождения в текущем году
+      DateTime nextBday = DateTime(now.year, int.parse(parts[1]), int.parse(parts[0]));
       
-      if (bdayDate.month < now.month || (bdayDate.month == now.month && bdayDate.day < now.day)) {
-        age--; 
-        bdayDate = DateTime(now.year + 1, bdayDate.month, bdayDate.day);
-      } else {
-        bdayDate = DateTime(now.year, bdayDate.month, bdayDate.day);
+      // Если ДР в этом году уже прошел, переносим на следующий год
+      if (nextBday.isBefore(DateTime(now.year, now.month, now.day))) {
+        nextBday = DateTime(now.year + 1, nextBday.month, nextBday.day);
       }
       
-      final diff = bdayDate.difference(DateTime(now.year, now.month, now.day)).inDays;
+      // Считаем, сколько лет исполнится
+      int age = nextBday.year - int.parse(parts[2]);
+      
+      // Считаем дни до праздника
+      final diff = nextBday.difference(DateTime(now.year, now.month, now.day)).inDays;
+      
       if (diff == 0) return '🎉 Сегодня ($age лет)!';
       return 'Через $diff дн. ($age лет)';
     } catch (e) {
