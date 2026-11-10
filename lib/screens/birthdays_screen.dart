@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart'; // Добавили для форматирования даты
+import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/birthday.dart';
 import 'gifts_screen.dart';
@@ -30,10 +30,8 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
     int remindDays = item?.remindDays ?? 1;
     String? photoPath = item?.photoPath;
 
-    // Функция для открытия календаря
     Future<void> pickDate() async {
       DateTime initialDate = DateTime.now();
-      // Пытаемся распарсить текущую введенную дату
       if (dateController.text.isNotEmpty) {
         try {
           final parts = dateController.text.replaceAll('.', '-').split('-');
@@ -48,11 +46,10 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
         initialDate: initialDate,
         firstDate: DateTime(1900),
         lastDate: DateTime.now(),
-        locale: const Locale('ru', 'RU'), // Русский язык в календаре
+        locale: const Locale('ru', 'RU'), 
       );
       
       if (picked != null) {
-        // Форматируем в ДД-ММ-ГГГГ
         String formattedDate = DateFormat('dd-MM-yyyy').format(picked);
         dateController.text = formattedDate;
       }
@@ -67,8 +64,10 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // ИСПРАВЛЕНО ЗДЕСЬ: добавили !
                 if (photoPath != null) 
-                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath))),
+                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath!))),
+                
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -80,7 +79,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                 const SizedBox(height: 8),
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Имя')),
                 
-                // Поле ввода даты с кнопкой календаря
                 TextField(
                   controller: dateController, 
                   decoration: InputDecoration(
@@ -93,7 +91,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                   ),
                   keyboardType: TextInputType.datetime,
                   onTap: () {
-                    // При нажатии на поле тоже открываем календарь
                     pickDate();
                   },
                 ),
@@ -113,7 +110,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             ElevatedButton(
               onPressed: () async {
                 String cleanName = nameController.text.trim();
-                // Меняем точки на дефисы на случай, если ввели вручную
                 String cleanDate = dateController.text.trim().replaceAll('.', '-');
 
                 if (cleanName.isEmpty || cleanDate.isEmpty) {
@@ -123,7 +119,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                   return;
                 }
                 
-                // Простая проверка на формат
                 final parts = cleanDate.split('-');
                 if (parts.length != 3) {
                    ScaffoldMessenger.of(context).showSnackBar(
@@ -208,6 +203,7 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
               onTap: () => _showAddEditDialog(item: bday),
+              // ИСПРАВЛЕНО ЗДЕСЬ: добавили !
               leading: bday.photoPath != null && File(bday.photoPath!).existsSync()
                   ? CircleAvatar(backgroundImage: FileImage(File(bday.photoPath!))) 
                   : Icon(Icons.cake, color: isSoon ? Colors.pink : Colors.grey), 
