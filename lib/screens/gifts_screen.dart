@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
 import '../models/gift.dart';
 
@@ -35,7 +36,6 @@ class _GiftsScreenState extends State<GiftsScreen> {
   void _showAddEditDialog({Gift? item}) {
     final titleController = TextEditingController(text: item?.title ?? '');
     final noteController = TextEditingController(text: item?.note ?? '');
-    
     String targetForWhom = item?.forWhom ?? widget.filterForWhom ?? 'Общее';
     String? photoPath = item?.photoPath;
 
@@ -57,25 +57,8 @@ class _GiftsScreenState extends State<GiftsScreen> {
                   },
                   icon: const Icon(Icons.photo), label: const Text('Выбрать фото'),
                 ),
-                TextField(
-                  controller: titleController, 
-                  decoration: const InputDecoration(labelText: 'Что подарить? (или ссылка)'),
-                ),
-                TextField(
-                  controller: noteController, 
-                  decoration: const InputDecoration(labelText: 'Описание (размер, цвет, пожелания)'),
-                  maxLines: 2,
-                ),
-                if (widget.filterForWhom == null) 
-                   Padding(
-                     padding: const EdgeInsets.only(top: 16),
-                     child: Text('Список: $targetForWhom', style: const TextStyle(color: Colors.grey)),
-                   )
-                else
-                   Padding(
-                     padding: const EdgeInsets.only(top: 16),
-                     child: Text('Список: ${widget.filterForWhom}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
-                   )
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Что подарить?')),
+                TextField(controller: noteController, decoration: const InputDecoration(labelText: 'Описание'), maxLines: 2),
               ],
             ),
           ),
@@ -83,24 +66,37 @@ class _GiftsScreenState extends State<GiftsScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () async {
-                if (titleController.text.isEmpty) return;
+                // Проверка: если название пустое, показываем сообщение и НЕ ЗАКРЫВАЕМ окно
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Пожалуйста, напишите, что подарить!')),
+                  );
+                  return;
+                }
+                
                 final db = await DatabaseHelper.instance.database;
                 final gift = Gift(
-                  title: titleController.text, 
+                  title: titleController.text.trim(), 
                   forWhom: targetForWhom, 
                   category: 'Подарок', 
                   isBought: item?.isBought ?? false,
-                  note: noteController.text,
+                  note: noteController.text.trim(),
                   photoPath: photoPath
                 );
                 
-                if (item == null) {
-                  await db.insert('gifts', gift.toMap());
-                } else {
-                  await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                try {
+                  if (item == null) {
+                    await db.insert('gifts', gift.toMap());
+                  } else {
+                    await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                  }
+                  if (mounted) Navigator.pop(context);
+                  _loadGifts();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка сохранения: $e')),
+                  );
                 }
-                if (mounted) Navigator.pop(context);
-                _loadGifts();
               },
               child: const Text('Сохранить'),
             ),
@@ -108,6 +104,25 @@ class _GiftsScreenState extends State<GiftsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(Gift gift) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить?'),
+        content: Text('Вы уверены, что хотите удалить "${gift.title}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final db = await DatabaseHelper.instance.database;
+      await db.delete('gifts', where: 'id = ?', whereArgs: [gift.id]);
+      _loadGifts();
+    }
   }
 
   @override
@@ -133,33 +148,30 @@ class _GiftsScreenState extends State<GiftsScreen> {
                 child: Row(
                   children: [
                     if (widget.filterForWhom != null && widget.avatarPath != null && File(widget.avatarPath!).existsSync())
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage: FileImage(File(widget.avatarPath!)),
-                      )
+                      CircleAvatar(radius: 20, backgroundImage: FileImage(File(widget.avatarPath!)))
                     else
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.teal.shade100,
-                        child: Text(entry.key.isNotEmpty ? entry.key[0].toUpperCase() : '?', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
-                      ),
+                      CircleAvatar(radius: 20, backgroundColor: Colors.teal.shade100, child: Text(entry.key[0].toUpperCase())),
                     const SizedBox(width: 12),
-                    Text(
-                      entry.key == 'Общее' ? 'Общие желания' : 'Wishlist: ${entry.key}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
-                    ),
+                    Text(entry.key == 'Общее' ? 'Общие желания' : 'Wishlist: ${entry.key}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
                   ],
                 ),
               ),
-              ...entry.value.map((gift) => Dismissible(
+              ...entry.value.map((gift) => Slidable(
                 key: Key(gift.id.toString()),
-                direction: DismissDirection.endToStart,
-                background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
-                onDismissed: (_) async {
-                  final db = await DatabaseHelper.instance.database;
-                  await db.delete('gifts', where: 'id = ?', whereArgs: [gift.id]);
-                  _loadGifts();
-                },
+                endActionPane: ActionPane(
+                  motion: const DrawerMotion(),
+                  extentRatio: 0.25,
+                  children: [
+                    SlidableAction(
+                      onPressed: (context) => _confirmDelete(gift), 
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete,
+                      label: 'Удалить',
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ],
+                ),
                 child: Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
@@ -179,8 +191,7 @@ class _GiftsScreenState extends State<GiftsScreen> {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (gift.note != null && gift.note!.isNotEmpty)
-                          Text(gift.note!, style: const TextStyle(fontSize: 12)),
+                        if (gift.note != null && gift.note!.isNotEmpty) Text(gift.note!, style: const TextStyle(fontSize: 12)),
                         if (gift.title.startsWith('http') || (gift.note?.startsWith('http') ?? false))
                           InkWell(
                             onTap: () async {
@@ -207,10 +218,7 @@ class _GiftsScreenState extends State<GiftsScreen> {
           );
         }).toList(),
       ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add), 
-        onPressed: () => _showAddEditDialog()
-      ),
+      floatingActionButton: FloatingActionButton(child: const Icon(Icons.add), onPressed: () => _showAddEditDialog()),
     );
   }
 }
