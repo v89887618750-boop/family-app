@@ -15,7 +15,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   List<Map<String, dynamic>> _categories = [];
   bool _isDarkMode = false;
-  double _fontSize = 1.0; // Коэффициент шрифта
+  double _fontSize = 1.0;
 
   @override
   void initState() { 
@@ -58,7 +58,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (category == null) {
                 await db.insert('categories', {'name': controller.text.trim()}, conflictAlgorithm: ConflictAlgorithm.ignore);
               } else {
-                // Обновляем название категории
                 await db.update('categories', {'name': controller.text.trim()}, where: 'id = ?', whereArgs: [category['id']]);
               }
               if (mounted) Navigator.pop(context);
@@ -75,16 +74,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final catName = category['name'];
     final db = await DatabaseHelper.instance.database;
 
-    // ПРОВЕРКА: есть ли задачи или покупки с этой категорией?
     final tasksCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM tasks WHERE category = ?', [catName])) ?? 0;
     final purchasesCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM purchases WHERE category = ?', [catName])) ?? 0;
 
     if (tasksCount > 0 || purchasesCount > 0) {
-      // Если есть привязанные записи — ЗАПРЕЩАЕМ удаление
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Нельзя удалить "$catName". К ней привязано дел: $tasksCount, покупок: $purchasesCount. Сначала измените их категорию.'),
+            content: Text('Нельзя удалить "$catName". К ней привязано дел: $tasksCount, покупок: $purchasesCount.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -92,7 +89,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // Если записей нет — удаляем
     await db.delete('categories', where: 'id = ?', whereArgs: [category['id']]);
     _loadCategories();
   }
@@ -110,12 +106,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: _isDarkMode, 
             onChanged: (val) {
               setState(() => _isDarkMode = val);
-              widget.onThemeChanged(val); // Меняем тему во всем приложении
+              widget.onThemeChanged(val); 
             },
           ),
+          // ИСПРАВЛЕННЫЙ БЛОК С ШРИФТОМ
           ListTile(
+            leading: const Icon(Icons.format_size),
             title: const Text('Размер шрифта'),
-            secondary: const Icon(Icons.format_size),
             subtitle: Slider(
               value: _fontSize,
               min: 0.8,
