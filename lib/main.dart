@@ -15,26 +15,36 @@ class FamilyListsApp extends StatefulWidget {
 
 class _FamilyListsAppState extends State<FamilyListsApp> {
   bool _isDarkMode = false;
+  double _fontSize = 1.0; // Коэффициент шрифта
 
   @override
   void initState() {
     super.initState();
-    _loadTheme();
+    _loadSettings();
   }
 
-  Future<void> _loadTheme() async {
+  Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+      _fontSize = prefs.getDouble('fontSize') ?? 1.0;
     });
   }
 
-  // Функция, которую мы будем вызывать из Настроек
   void toggleTheme(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', value);
     setState(() {
       _isDarkMode = value;
+    });
+  }
+
+  // Функция для смены шрифта из настроек
+  void changeFontSize(double value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('fontSize', value);
+    setState(() {
+      _fontSize = value;
     });
   }
 
@@ -54,7 +64,19 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
         brightness: Brightness.dark,
       ),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: HomeScreen(onThemeChanged: toggleTheme), // Передаем функцию
+      // Оборачиваем в MediaQuery, чтобы менять размер текста во всем приложении
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(_fontSize), // Применяем масштаб
+          ),
+          child: child!,
+        );
+      },
+      home: HomeScreen(
+        onThemeChanged: toggleTheme,
+        onFontSizeChanged: changeFontSize, // Передаем функцию шрифта
+      ),
     );
   }
 }
