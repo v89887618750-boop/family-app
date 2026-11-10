@@ -64,7 +64,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ИСПРАВЛЕНО ЗДЕСЬ: добавили !
                 if (photoPath != null) 
                   CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath!))),
                 
@@ -110,19 +109,12 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             ElevatedButton(
               onPressed: () async {
                 String cleanName = nameController.text.trim();
-                String cleanDate = dateController.text.trim().replaceAll('.', '-');
+                // Умная замена точек и слешей на дефисы
+                String cleanDate = dateController.text.trim().replaceAll('.', '-').replaceAll('/', '-');
 
                 if (cleanName.isEmpty || cleanDate.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Пожалуйста, заполните Имя и Дату')),
-                  );
-                  return;
-                }
-                
-                final parts = cleanDate.split('-');
-                if (parts.length != 3) {
-                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Дата должна быть в формате ДД-ММ-ГГГГ')),
                   );
                   return;
                 }
@@ -136,13 +128,20 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
                   photoPath: photoPath
                 );
                 
-                if (item == null) {
-                  await db.insert('birthdays', bday.toMap());
-                } else {
-                  await db.update('birthdays', bday.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                // Сохранение или обновление
+                try {
+                  if (item == null) {
+                    await db.insert('birthdays', bday.toMap());
+                  } else {
+                    await db.update('birthdays', bday.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                  }
+                  if (mounted) Navigator.pop(context);
+                  _loadBirthdays();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка сохранения: $e')),
+                  );
                 }
-                if (mounted) Navigator.pop(context);
-                _loadBirthdays();
               },
               child: const Text('Сохранить'),
             ),
@@ -203,7 +202,6 @@ class _BirthdaysScreenState extends State<BirthdaysScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
               onTap: () => _showAddEditDialog(item: bday),
-              // ИСПРАВЛЕНО ЗДЕСЬ: добавили !
               leading: bday.photoPath != null && File(bday.photoPath!).existsSync()
                   ? CircleAvatar(backgroundImage: FileImage(File(bday.photoPath!))) 
                   : Icon(Icons.cake, color: isSoon ? Colors.pink : Colors.grey), 
