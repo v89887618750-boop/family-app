@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
-import 'gifts_screen.dart'; // Импорт подарков
+import 'gifts_screen.dart';
 
 class FamilyScreen extends StatefulWidget {
   const FamilyScreen({super.key});
@@ -257,17 +257,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
       appBar: AppBar(
         title: const Text('Моя семья'),
         actions: [
-          IconButton(
+          // Кнопка перехода в Wishlist с текстом и стрелкой
+          TextButton.icon(
             icon: const Icon(Icons.card_giftcard, color: Colors.teal),
-            tooltip: 'Все подарки (Wishlist)',
+            label: const Text('Wishlist', style: TextStyle(fontSize: 16, color: Colors.teal)),
             onPressed: () {
-              // Вот здесь мы явно указываем, что фильтров нет
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const GiftsScreen(filterForWhom: null, avatarPath: null)),
               );
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: _members.isEmpty 
