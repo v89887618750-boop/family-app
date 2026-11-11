@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
-import 'gifts_screen.dart';
+import 'gifts_screen.dart'; // Импорт подарков
 
 class FamilyScreen extends StatefulWidget {
   const FamilyScreen({super.key});
@@ -110,7 +110,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   decoration: const InputDecoration(labelText: 'Отчество'),
                 ),
                 const SizedBox(height: 8),
-                // ВОЗВРАЩАЕМ ДЕВИЧЬЮ ФАМИЛИЮ
                 TextField(
                   controller: maidenNameController,
                   decoration: const InputDecoration(labelText: 'Девичья фамилия (если есть)'),
@@ -180,7 +179,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   fullName += ' ${patronymicController.text.trim()}';
                 }
                 
-                // Если есть девичья, добавляем в скобках
                 if (maidenNameController.text.trim().isNotEmpty) {
                   fullName += ' (${maidenNameController.text.trim()})';
                 }
@@ -257,20 +255,21 @@ class _FamilyScreenState extends State<FamilyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-  title: const Text('Моя семья'),
-  actions: [
-    IconButton(
-      icon: const Icon(Icons.card_giftcard, color: Colors.teal),
-      tooltip: 'Все подарки (Wishlist)',
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const GiftsScreen()),
-        );
-      },
-    ),
-  ],
-),
+        title: const Text('Моя семья'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.card_giftcard, color: Colors.teal),
+            tooltip: 'Все подарки (Wishlist)',
+            onPressed: () {
+              // Вот здесь мы явно указываем, что фильтров нет
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const GiftsScreen(filterForWhom: null, avatarPath: null)),
+              );
+            },
+          ),
+        ],
+      ),
       body: _members.isEmpty 
           ? const Center(child: Text('В семье пока никого нет. Добавьте первого!'))
           : GridView.builder(
