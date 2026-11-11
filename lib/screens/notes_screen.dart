@@ -8,7 +8,12 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
-  List<Map<String, dynamic>> _notes = [];
+  List<Map<String, dynamic>> _allNotes = [];
+  List<Map<String, dynamic>> _filteredNotes = [];
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  final List<String> _categories = ['Рецепт', 'Пароль', 'Бытовое', 'Разное'];
 
   @override
   void initState() { super.initState(); _loadNotes(); }
@@ -16,12 +21,34 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _loadNotes() async {
     final db = await DatabaseHelper.instance.database;
     final maps = await db.query('notes', orderBy: 'date DESC');
-    setState(() => _notes = maps);
+    setState(() {
+      _allNotes = maps;
+      _filterNotes(_searchQuery);
+    });
+  }
+
+  void _filterNotes(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredNotes = _allNotes;
+      } else {
+        _filteredNotes = _allNotes.where((note) {
+          final title = note['title'].toString().toLowerCase();
+          final content = note['content'].toString().toLowerCase();
+          final category = (note['category'] ?? '').toString().toLowerCase();
+          return title.contains(query.toLowerCase()) || 
+                 content.contains(query.toLowerCase()) || 
+                 category.contains(query.toLowerCase());
+        }).toList();
+      }
+    });
   }
 
   void _showAddEditDialog({Map<String, dynamic>? note}) {
     final titleController = TextEditingController(text: note != null ? note['title'] : '');
     final contentController = TextEditingController(text: note != null ? note['content'] : '');
+    String selectedCategory = note != null && note['category'] != null ? note['category'] : _categories[0];
     Color selectedColor = note != null ? Color(note['color']) : Colors.yellow.shade100;
 
     final colors = [
@@ -41,7 +68,14 @@ class _NotesScreenState extends State<NotesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Заголовок (например: Рецепт борща)')),
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Заголовок (о чём заметка?)')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(labelText: 'Категория'),
+                  items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setDialogState(() => selectedCategory = v!),
+                ),
                 const SizedBox(height: 8),
                 TextField(controller: contentController, decoration: const InputDecoration(labelText: 'Текст заметки'), maxLines: 4),
                 const SizedBox(height: 16),
@@ -74,6 +108,7 @@ class _NotesScreenState extends State<NotesScreen> {
                 final data = {
                   'title': titleController.text.trim(),
                   'content': contentController.text.trim(),
+                  'category': selectedCategory,
                   'date': DateTime.now().toIso8601String(),
                   'color': selectedColor.value,
                 };
@@ -116,9 +151,29 @@ class _NotesScreenState extends State<NotesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Семейный блокнот')),
-      body: _notes.isEmpty 
-          ? const Center(child: Text('Заметок пока нет. Нажмите +, чтобы создать!'))
+      appBar: AppBar(
+        title: const Text('Семейный блокнот'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _filterNotes,
+              decoration: InputDecoration(
+                hintText: 'Поиск по заметкам...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Theme.of(context).cardColor,
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: _filteredNotes.isEmpty 
+          ? Center(child: Text(_searchQuery.isEmpty ? 'Заметок пока нет. Нажмите +, чтобы создать!' : 'Ничего не найдено'))
           : GridView.builder(
               padding: const EdgeInsets.all(8),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -127,9 +182,9 @@ class _NotesScreenState extends State<NotesScreen> {
                 mainAxisSpacing: 8,
                 childAspectRatio: 0.9,
               ),
-              itemCount: _notes.length,
+              itemCount: _filteredNotes.length,
               itemBuilder: (context, index) {
-                final note = _notes[index];
+                final note = _filteredNotes[index];
                 final color = Color(note['color']);
                 return GestureDetector(
                   onTap: () => _showAddEditDialog(note: note),
@@ -142,6 +197,12 @@ class _NotesScreenState extends State<NotesScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(note['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4)),
+                            child: Text(note['category'] ?? 'Разное', style: const TextStyle(fontSize: 10)),
+                          ),
                           const SizedBox(height: 8),
                           Expanded(
                             child: Text(note['content'], style: const TextStyle(fontSize: 13), maxLines: 5, overflow: TextOverflow.ellipsis),
