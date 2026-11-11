@@ -125,7 +125,6 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
         String subtitle = '${task.category} • ${task.periodicity}';
         
-        // ДОБАВЛЕНО ВРЕМЯ В SUBTITLE
         if (task.dueDate != null) {
           subtitle += " • до ${task.dueDate!.split('-').reversed.join('.')}";
         }
@@ -151,14 +150,32 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             final db = await DatabaseHelper.instance.database;
             task.isCompleted = !task.isCompleted;
             
+            // --- ЛОГИКА ПРОЛОНГАЦИИ ---
             if (task.isCompleted) {
-              if (task.periodicity == 'Ежемесячно' && task.dueDate != null) {
+              DateTime now = DateTime.now();
+              
+              if (task.periodicity == 'Ежедневно') {
+                // Если ежедневное, переносим дату на завтра (или ставим сегодня)
+                DateTime nextDue = now.add(const Duration(days: 1));
+                task.dueDate = nextDue.toIso8601String().split('T')[0];
+                task.isCompleted = false; 
+              } 
+              else if (task.periodicity == 'Ежемесячно' && task.dueDate != null) {
+                // Если ежемесячное, переносим на следующий месяц
                 DateTime due = DateTime.parse(task.dueDate!);
                 DateTime nextDue = DateTime(due.year, due.month + 1, due.day);
                 task.dueDate = nextDue.toIso8601String().split('T')[0];
                 task.isCompleted = false; 
               }
+              else if (task.periodicity == 'Ежегодно' && task.dueDate != null) {
+                // Если ежегодное, переносим на следующий год
+                DateTime due = DateTime.parse(task.dueDate!);
+                DateTime nextDue = DateTime(due.year + 1, due.month, due.day);
+                task.dueDate = nextDue.toIso8601String().split('T')[0];
+                task.isCompleted = false; 
+              }
             }
+            // -------------------------
 
             await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
             
