@@ -35,6 +35,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     String surname = '';
     String name = '';
     String patronymic = '';
+    String maidenName = '';
     
     if (member != null && member['name'] != null) {
       final parts = member['name'].toString().split(' ');
@@ -46,6 +47,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final surnameController = TextEditingController(text: surname);
     final nameController = TextEditingController(text: name);
     final patronymicController = TextEditingController(text: patronymic);
+    final maidenNameController = TextEditingController(text: maidenName);
     
     String relation = member != null ? member['relation'] : 'Сын';
     String? photoPath = member != null ? member['photo_path'] : null;
@@ -105,6 +107,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 TextField(
                   controller: patronymicController,
                   decoration: const InputDecoration(labelText: 'Отчество'),
+                ),
+                const SizedBox(height: 8),
+                // ВОЗВРАЩАЕМ ДЕВИЧЬЮ ФАМИЛИЮ
+                TextField(
+                  controller: maidenNameController,
+                  decoration: const InputDecoration(labelText: 'Девичья фамилия (если есть)'),
                 ),
                 const SizedBox(height: 16),
                 
@@ -169,6 +177,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 String fullName = '${surnameController.text.trim()} ${nameController.text.trim()}';
                 if (patronymicController.text.trim().isNotEmpty) {
                   fullName += ' ${patronymicController.text.trim()}';
+                }
+                
+                // Если есть девичья, добавляем в скобках
+                if (maidenNameController.text.trim().isNotEmpty) {
+                  fullName += ' (${maidenNameController.text.trim()})';
                 }
 
                 int? bdayId = member != null ? member['birthday_id'] : null;
@@ -247,12 +260,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
           ? const Center(child: Text('В семье пока никого нет. Добавьте первого!'))
           : GridView.builder(
               padding: const EdgeInsets.all(16),
-              // ИСПРАВЛЕНИЕ: Делаем карточки чуть выше (childAspectRatio меньше 1.0)
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: 0.8, // <-- Изменено с 1.0 на 0.8, чтобы добавить высоты
+                childAspectRatio: 0.8, 
               ),
               itemCount: _members.length,
               itemBuilder: (context, index) {
@@ -276,15 +288,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     onTap: () => _showAddEditDialog(member: member), 
                     child: Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(8.0), // Немного отступа внутри
+                        padding: const EdgeInsets.all(8.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             if (member['photo_path'] != null && File(member['photo_path']).existsSync())
-                              // Уменьшили аватарку с 40 до 35 радиуса
                               CircleAvatar(radius: 35, backgroundImage: FileImage(File(member['photo_path']))),
                             const SizedBox(height: 8),
-                            // Ограничиваем текст в 2 строки
                             Text(
                               member['name'], 
                               textAlign: TextAlign.center, 
