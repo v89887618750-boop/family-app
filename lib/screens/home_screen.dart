@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'tasks_screen.dart';
 import 'purchases_screen.dart';
-import 'family_screen.dart'; // <-- НОВЫЙ ИМПОРТ
-import 'gifts_screen.dart';
+import 'family_screen.dart';
+import 'notes_screen.dart'; // Новый экран
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,8 +23,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final screens = [
       const TasksScreen(),
       const PurchasesScreen(),
-      const FamilyScreen(), // <-- ЭКРАН СЕМЬИ
-      const GiftsScreen(),
+      const FamilyScreen(),
+      const NotesScreen(), // <-- ЭКРАН ЗАМЕТОК
       SettingsScreen(onThemeChanged: widget.onThemeChanged, onFontSizeChanged: widget.onFontSizeChanged),
     ];
 
@@ -40,8 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.task), label: 'Дела'),
           NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'Покупки'),
-          NavigationDestination(icon: Icon(Icons.family_restroom), label: 'Семья'), // <-- Иконка семьи
-          NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Подарки'),
+          NavigationDestination(icon: Icon(Icons.family_restroom), label: 'Семья'),
+          NavigationDestination(icon: Icon(Icons.note), label: 'Заметки'), // <-- Иконка заметок
           NavigationDestination(icon: Icon(Icons.settings), label: 'Настройки'),
         ],
       ),
