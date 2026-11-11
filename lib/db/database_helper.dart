@@ -16,8 +16,8 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    // Версия 10: добавлена бронь подарков (reserved_by)
-    return await openDatabase(path, version: 10, onCreate: _createDB, onUpgrade: _upgradeDB);
+    // Версия 11: добавлена таблица заметок
+    return await openDatabase(path, version: 11, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -39,7 +39,8 @@ class DatabaseHelper {
       title TEXT NOT NULL, 
       category TEXT NOT NULL, 
       periodicity TEXT NOT NULL, 
-      isCompleted INTEGER NOT NULL
+      isCompleted INTEGER NOT NULL,
+      note TEXT
     )''');
 
     // Таблица дней рождения
@@ -52,7 +53,7 @@ class DatabaseHelper {
       photo_path TEXT
     )''');
 
-    // Таблица подарков (с добавленным reserved_by)
+    // Таблица подарков
     await db.execute('''CREATE TABLE gifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, 
       title TEXT NOT NULL, 
@@ -60,8 +61,7 @@ class DatabaseHelper {
       category TEXT NOT NULL, 
       isBought INTEGER NOT NULL,
       note TEXT,
-      photo_path TEXT,
-      reserved_by TEXT
+      photo_path TEXT
     )''');
 
     // Таблица категорий
@@ -87,6 +87,15 @@ class DatabaseHelper {
       birthday_id INTEGER,
       photo_path TEXT,
       FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
+    )''');
+
+    // НОВАЯ ТАБЛИЦА: Заметки
+    await db.execute('''CREATE TABLE notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      date TEXT NOT NULL,
+      color INTEGER DEFAULT 0
     )''');
     
     // Добавляем базовые категории
@@ -130,13 +139,24 @@ class DatabaseHelper {
       )''');
     }
     if (oldVersion < 9) {
-      try { await db.execute('ALTER TABLE tasks ADD COLUMN due_time TEXT'); } catch (e) {}
+      try {
+        await db.execute('ALTER TABLE tasks ADD COLUMN due_time TEXT');
+      } catch (e) {}
     }
-    // ОБНОВЛЕНИЕ ДО ВЕРСИИ 10 (Бронирование подарков)
     if (oldVersion < 10) {
       try {
-        await db.execute('ALTER TABLE gifts ADD COLUMN reserved_by TEXT');
+        await db.execute('ALTER TABLE purchases ADD COLUMN note TEXT');
       } catch (e) {}
+    }
+    // ОБНОВЛЕНИЕ ДО ВЕРСИИ 11 (Заметки)
+    if (oldVersion < 11) {
+      await db.execute('''CREATE TABLE notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        date TEXT NOT NULL,
+        color INTEGER DEFAULT 0
+      )''');
     }
   }
 
