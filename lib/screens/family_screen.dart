@@ -255,7 +255,21 @@ class _FamilyScreenState extends State<FamilyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Моя семья')),
+      appBar: AppBar(
+  title: const Text('Моя семья'),
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.card_giftcard, color: Colors.teal),
+      tooltip: 'Все подарки (Wishlist)',
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const GiftsScreen()),
+        );
+      },
+    ),
+  ],
+),
       body: _members.isEmpty 
           ? const Center(child: Text('В семье пока никого нет. Добавьте первого!'))
           : GridView.builder(
