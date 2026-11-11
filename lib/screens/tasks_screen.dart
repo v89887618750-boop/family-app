@@ -79,7 +79,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
            
            if (t.readingValue != null) {
              final diff = due.difference(today).inDays;
-             if (diff >= 0 && diff <= 2) return true; // Счетчики за 2 дня
+             if (diff >= 0 && diff <= 2) return true; 
            }
         }
         return false;
@@ -124,8 +124,13 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
         }
 
         String subtitle = '${task.category} • ${task.periodicity}';
+        
+        // ДОБАВЛЕНО ВРЕМЯ В SUBTITLE
         if (task.dueDate != null) {
           subtitle += " • до ${task.dueDate!.split('-').reversed.join('.')}";
+        }
+        if (task.dueTime != null) {
+          subtitle += " в ${task.dueTime}"; 
         }
 
         return ItemTile(
@@ -146,18 +151,14 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             final db = await DatabaseHelper.instance.database;
             task.isCompleted = !task.isCompleted;
             
-            // --- ЛОГИКА ПРОЛОНГАЦИИ ---
             if (task.isCompleted) {
-              // Если это счетчик или ежемесячная задача, переносим дату на следующий месяц
               if (task.periodicity == 'Ежемесячно' && task.dueDate != null) {
                 DateTime due = DateTime.parse(task.dueDate!);
-                // Прибавляем один месяц (если сейчас декабрь, перенесет на январь следующего года)
                 DateTime nextDue = DateTime(due.year, due.month + 1, due.day);
                 task.dueDate = nextDue.toIso8601String().split('T')[0];
-                task.isCompleted = false; // Снимаем галочку, чтобы задача снова стала активной!
+                task.isCompleted = false; 
               }
             }
-            // -------------------------
 
             await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
             
