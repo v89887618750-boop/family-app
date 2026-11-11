@@ -16,8 +16,8 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    // Версия 9: добавлено время дедлайна (due_time) для задач
-    return await openDatabase(path, version: 9, onCreate: _createDB, onUpgrade: _upgradeDB);
+    // Версия 10: добавлена бронь подарков (reserved_by)
+    return await openDatabase(path, version: 10, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -52,7 +52,7 @@ class DatabaseHelper {
       photo_path TEXT
     )''');
 
-    // Таблица подарков
+    // Таблица подарков (с добавленным reserved_by)
     await db.execute('''CREATE TABLE gifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, 
       title TEXT NOT NULL, 
@@ -60,7 +60,8 @@ class DatabaseHelper {
       category TEXT NOT NULL, 
       isBought INTEGER NOT NULL,
       note TEXT,
-      photo_path TEXT
+      photo_path TEXT,
+      reserved_by TEXT
     )''');
 
     // Таблица категорий
@@ -128,10 +129,13 @@ class DatabaseHelper {
         FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
       )''');
     }
-    // ОБНОВЛЕНИЕ ДО ВЕРСИИ 9 (Время дедлайна)
     if (oldVersion < 9) {
+      try { await db.execute('ALTER TABLE tasks ADD COLUMN due_time TEXT'); } catch (e) {}
+    }
+    // ОБНОВЛЕНИЕ ДО ВЕРСИИ 10 (Бронирование подарков)
+    if (oldVersion < 10) {
       try {
-        await db.execute('ALTER TABLE tasks ADD COLUMN due_time TEXT');
+        await db.execute('ALTER TABLE gifts ADD COLUMN reserved_by TEXT');
       } catch (e) {}
     }
   }
