@@ -19,7 +19,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _maidenNameController = TextEditingController();
   String? _photoPath;
 
-  // Переменные для даты
   int? _selectedDay;
   int? _selectedMonth;
   int? _selectedYear;
@@ -44,7 +43,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       fullName += ' ${_patronymicController.text.trim()}';
     }
 
-    // Форматируем дату в ДД-ММ-ГГГГ
     String formattedDate = '${_selectedDay.toString().padLeft(2, '0')}-${_selectedMonth.toString().padLeft(2, '0')}-$_selectedYear';
 
     final prefs = await SharedPreferences.getInstance();
@@ -53,10 +51,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (_photoPath != null) await prefs.setString('my_photo', _photoPath!);
 
     final db = await DatabaseHelper.instance.database;
+    
+    // 1. Сначала создаем запись в Днях рождения для себя
+    int bdayId = await db.insert('birthdays', {
+      'name': fullName,
+      'date': formattedDate,
+      'category': 'Я',
+      'remind_days': 1,
+      'photo_path': _photoPath,
+    });
+
+    // 2. Затем создаем запись в Семье и привязываем к ДР
     await db.insert('family_members', {
       'name': fullName,
       'relation': 'Я',
       'photo_path': _photoPath,
+      'birthday_id': bdayId, // <-- ПРИВЯЗКА!
     });
 
     widget.onRegistrationComplete();
@@ -103,10 +113,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const Text('Дата рождения', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               
-              // ВЫПАДАЮЩИЕ СПИСКИ ДЛЯ ДАТЫ
               Row(
                 children: [
-                  // День
                   Expanded(
                     flex: 2,
                     child: DropdownButtonFormField<int>(
@@ -117,7 +125,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Месяц
                   Expanded(
                     flex: 3,
                     child: DropdownButtonFormField<int>(
@@ -128,9 +135,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Год
                   Expanded(
-                    flex: 3,
+                    flex: 2,
                     child: DropdownButtonFormField<int>(
                       decoration: const InputDecoration(labelText: 'Год', border: OutlineInputBorder()),
                       value: _selectedYear,
