@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../models/purchase.dart';
 
 class AddEditScreen extends StatefulWidget {
   final String type;
-  final dynamic item; // Сюда передается покупка или дело
+  final dynamic item;
   final List<String> categories;
 
   const AddEditScreen({super.key, required this.type, this.item, required this.categories});
@@ -19,6 +20,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   late String _selectedCategory;
   String _periodicity = 'Разово';
   DateTime? _dueDate;
+  TimeOfDay? _dueTime; // Время дедлайна
   
   bool _isMeter = false;
   final _readingController = TextEditingController();
@@ -39,9 +41,17 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _titleController.text = widget.item.title;
       _selectedCategory = widget.item.category;
       _periodicity = widget.item.periodicity;
+      
       if (widget.item.dueDate != null) {
         _dueDate = DateTime.tryParse(widget.item.dueDate);
       }
+      
+      // Восстанавливаем время, если оно было сохранено
+      if (widget.item.dueTime != null && widget.item.dueTime!.contains(':')) {
+        final parts = widget.item.dueTime!.split(':');
+        _dueTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+      }
+      
       if (widget.type == 'task' && widget.item.readingValue != null) {
         _isMeter = true;
         _readingController.text = widget.item.readingValue;
@@ -66,12 +76,19 @@ class _AddEditScreenState extends State<AddEditScreen> {
       dateToSave = _dueDate != null ? _dueDate!.toIso8601String().split('T')[0] : null;
     }
 
+    // Форматируем время в строку "ЧЧ:ММ"
+    String? timeToSave;
+    if (_dueTime != null) {
+      timeToSave = '${_dueTime!.hour.toString().padLeft(2, '0')}:${_dueTime!.minute.toString().padLeft(2, '0')}';
+    }
+
     final data = {
       'title': _titleController.text.trim(),
       'category': _selectedCategory,
       'periodicity': _periodicity,
       'isCompleted': widget.item?.isCompleted == true ? 1 : 0,
       'due_date': dateToSave,
+      'due_time': timeToSave, // Сохраняем время
       'reading_value': _isMeter ? _readingController.text : null,
     };
 
@@ -80,6 +97,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         final taskId = await db.insert('tasks', Task(
           title: data['title'] as String, category: data['category'] as String, 
           periodicity: data['periodicity'] as String, dueDate: data['due_date'] as String?,
+          dueTime: data['due_time'] as String?,
           readingValue: data['reading_value'] as String?
         ).toMap());
         
@@ -145,9 +163,10 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
               const SizedBox(height: 16),
 
+              // Выбор ДАТЫ (только для задач)
               if (widget.type == 'task' && _periodicity != 'Ежедневно')
                 ListTile(
-                  title: Text(_dueDate == null ? 'Установить дату (дедлайн)' : 'Дедлайн: ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year}'),
+                  title: Text(_dueDate == null ? 'Установить дату' : 'Дата: ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year}'),
                   leading: const Icon(Icons.calendar_today),
                   trailing: _dueDate != null ? IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _dueDate = null)) : null,
                   onTap: () async {
@@ -160,7 +179,23 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     if (picked != null) setState(() => _dueDate = picked);
                   },
                 ),
+
+              // НОВЫЙ БЛОК: Выбор ВРЕМЕНИ (только для разовых задач)
+              if (widget.type == 'task' && _periodicity == 'Разово')
+                ListTile(
+                  title: Text(_dueTime == null ? 'Установить время' : 'Время: ${_dueTime!.hour.toString().padLeft(2, '0')}:${_dueTime!.minute.toString().padLeft(2, '0')}'),
+                  leading: const Icon(Icons.access_time),
+                  trailing: _dueTime != null ? IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _dueTime = null)) : null,
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: _dueTime ?? TimeOfDay.now(),
+                    );
+                    if (picked != null) setState(() => _dueTime = picked);
+                  },
+                ),
               
+              // Блок счетчиков
               if (widget.type == 'task' && _homeCategories.contains(_selectedCategory)) ...[
                 const Divider(),
                 SwitchListTile(
