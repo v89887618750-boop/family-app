@@ -5,7 +5,8 @@ class Task {
   final String periodicity;
   bool isCompleted;
   String? dueDate;
-  String? readingValue; // Добавлено поле для показаний счетчика
+  String? dueTime; // Новое поле для времени (например, "15:00")
+  String? readingValue; 
 
   Task({
     this.id, 
@@ -14,6 +15,7 @@ class Task {
     required this.periodicity, 
     this.isCompleted = false,
     this.dueDate,
+    this.dueTime,
     this.readingValue,
   });
 
@@ -24,6 +26,7 @@ class Task {
     'periodicity': periodicity, 
     'isCompleted': isCompleted ? 1 : 0,
     'due_date': dueDate,
+    'due_time': dueTime,
     'reading_value': readingValue,
   };
   
@@ -34,6 +37,7 @@ class Task {
     periodicity: map['periodicity'], 
     isCompleted: map['isCompleted'] == 1,
     dueDate: map['due_date'],
+    dueTime: map['due_time'],
     readingValue: map['reading_value'],
   );
 }
