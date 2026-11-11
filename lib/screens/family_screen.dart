@@ -23,7 +23,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
   Future<void> _loadMembers() async {
     final db = await DatabaseHelper.instance.database;
-    // Делаем JOIN, чтобы сразу вытащить дату рождения
     final maps = await db.rawQuery('''
       SELECT fm.*, b.date as bday_date 
       FROM family_members fm
@@ -33,7 +32,21 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   void _showAddEditDialog({Map<String, dynamic>? member}) {
-    final nameController = TextEditingController(text: member != null ? member['name'] : '');
+    String surname = '';
+    String name = '';
+    String patronymic = '';
+    
+    if (member != null && member['name'] != null) {
+      final parts = member['name'].toString().split(' ');
+      if (parts.length > 0) surname = parts[0];
+      if (parts.length > 1) name = parts[1];
+      if (parts.length > 2) patronymic = parts.sublist(2).join(' ');
+    }
+
+    final surnameController = TextEditingController(text: surname);
+    final nameController = TextEditingController(text: name);
+    final patronymicController = TextEditingController(text: patronymic);
+    
     String relation = member != null ? member['relation'] : 'Сын';
     String? photoPath = member != null ? member['photo_path'] : null;
 
@@ -41,7 +54,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
     int? selectedMonth;
     int? selectedYear;
 
-    // Если редактируем, парсим существующую дату в списки
     if (member != null && member['bday_date'] != null) {
       try {
         final parts = member['bday_date'].toString().split('-');
@@ -71,8 +83,31 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   },
                   icon: const Icon(Icons.photo_camera), label: const Text('Фото'),
                 ),
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Имя (ФИО)')),
+                
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: surnameController,
+                        decoration: const InputDecoration(labelText: 'Фамилия'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: 'Имя'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: patronymicController,
+                  decoration: const InputDecoration(labelText: 'Отчество'),
+                ),
                 const SizedBox(height: 16),
+                
                 DropdownButtonFormField<String>(
                   value: relation,
                   decoration: const InputDecoration(labelText: 'Кем является?'),
@@ -124,18 +159,26 @@ class _FamilyScreenState extends State<FamilyScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () async {
-                if (nameController.text.trim().isEmpty) return;
+                if (surnameController.text.trim().isEmpty && nameController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Введите хотя бы Имя и Фамилию')));
+                  return;
+                }
+                
                 final db = await DatabaseHelper.instance.database;
                 
+                String fullName = '${surnameController.text.trim()} ${nameController.text.trim()}';
+                if (patronymicController.text.trim().isNotEmpty) {
+                  fullName += ' ${patronymicController.text.trim()}';
+                }
+
                 int? bdayId = member != null ? member['birthday_id'] : null;
                 
-                // Если дата выбрана, обновляем или создаем ДР
                 if (selectedDay != null && selectedMonth != null && selectedYear != null) {
                   String formattedDate = '${selectedDay.toString().padLeft(2, '0')}-${selectedMonth.toString().padLeft(2, '0')}-$selectedYear';
                   
                   if (bdayId == null) {
                     bdayId = await db.insert('birthdays', {
-                      'name': nameController.text.trim(),
+                      'name': fullName,
                       'date': formattedDate,
                       'category': relation,
                       'remind_days': 1,
@@ -143,7 +186,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     });
                   } else {
                     await db.update('birthdays', {
-                      'name': nameController.text.trim(),
+                      'name': fullName,
                       'date': formattedDate,
                       'category': relation,
                       'photo_path': photoPath,
@@ -153,14 +196,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
                 if (member == null) {
                   await db.insert('family_members', {
-                    'name': nameController.text.trim(),
+                    'name': fullName,
                     'relation': relation,
                     'photo_path': photoPath,
                     'birthday_id': bdayId,
                   });
                 } else {
                   await db.update('family_members', {
-                    'name': nameController.text.trim(),
+                    'name': fullName,
                     'relation': relation,
                     'photo_path': photoPath,
                     'birthday_id': bdayId,
@@ -204,10 +247,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
           ? const Center(child: Text('В семье пока никого нет. Добавьте первого!'))
           : GridView.builder(
               padding: const EdgeInsets.all(16),
+              // ИСПРАВЛЕНИЕ: Делаем карточки чуть выше (childAspectRatio меньше 1.0)
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
+                childAspectRatio: 0.8, // <-- Изменено с 1.0 на 0.8, чтобы добавить высоты
               ),
               itemCount: _members.length,
               itemBuilder: (context, index) {
@@ -230,18 +275,29 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   child: InkWell(
                     onTap: () => _showAddEditDialog(member: member), 
                     child: Card(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (member['photo_path'] != null && File(member['photo_path']).existsSync())
-                            CircleAvatar(radius: 40, backgroundImage: FileImage(File(member['photo_path']))),
-                          const SizedBox(height: 8),
-                          Text(member['name'], textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text(member['relation'], style: const TextStyle(color: Colors.grey)),
-                          // ВЫВОДИМ ДАТУ!
-                          if (member['bday_date'] != null)
-                            Text(member['bday_date'], style: const TextStyle(fontSize: 12, color: Colors.teal)),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0), // Немного отступа внутри
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (member['photo_path'] != null && File(member['photo_path']).existsSync())
+                              // Уменьшили аватарку с 40 до 35 радиуса
+                              CircleAvatar(radius: 35, backgroundImage: FileImage(File(member['photo_path']))),
+                            const SizedBox(height: 8),
+                            // Ограничиваем текст в 2 строки
+                            Text(
+                              member['name'], 
+                              textAlign: TextAlign.center, 
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
+                            ),
+                            Text(member['relation'], style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                            const SizedBox(height: 4),
+                            if (member['bday_date'] != null)
+                              Text(member['bday_date'], style: const TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
