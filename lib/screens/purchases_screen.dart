@@ -79,6 +79,72 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
     }
   }
 
+  // Окно с чек-листом
+  void _showItemsChecklist(Purchase item) {
+    final List<String> currentItems = List.from(item.itemsList);
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(item.title), // Название магазина
+          content: SizedBox(
+            width: double.maxFinite,
+            child: currentItems.isEmpty 
+              ? const Text('Список пуст. Добавьте продукты!')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: currentItems.length,
+                  itemBuilder: (context, index) {
+                    return CheckboxListTile(
+                      title: Text(currentItems[index]),
+                      value: false, // Галочка только визуальная для чек-листа
+                      onChanged: (val) {
+                        // Можно добавить логику "куплено"
+                      },
+                    );
+                  },
+                ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // Здесь можно добавить логику добавления нового продукта
+                final controller = TextEditingController();
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Добавить продукт'),
+                    content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Например: Хлеб')),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+                      TextButton(
+                        onPressed: () async {
+                          if (controller.text.isNotEmpty) {
+                            setDialogState(() => currentItems.add(controller.text));
+                            Navigator.pop(context);
+                            
+                            // Сохраняем обновленный список в базу
+                            final db = await DatabaseHelper.instance.database;
+                            item.itemsList = currentItems;
+                            await db.update('purchases', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                          }
+                        },
+                        child: const Text('Добавить'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: const Text('+ Добавить'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Purchase> _getFilteredPurchases(String filter) {
     List<Purchase> filtered = _allPurchases.where((p) {
       if (filter == 'today') {
@@ -115,7 +181,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
             extentRatio: 0.25,
             children: [
               SlidableAction(
-                onPressed: (context) => _confirmDelete(item), // ВЫЗОВ ПОДТВЕРЖДЕНИЯ
+                onPressed: (context) => _confirmDelete(item), 
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
                 icon: Icons.delete,
@@ -127,7 +193,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
           child: Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
-              onTap: () => _openAddEdit(item: item), // ОТКРЫТИЕ РЕДАКТОРА
+              onTap: () => _showItemsChecklist(item), // При нажатии открываем чек-лист!
               leading: Checkbox(
                 value: item.isCompleted,
                 onChanged: (_) async {
@@ -147,6 +213,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
               ),
               title: Text(item.title, style: TextStyle(decoration: item.isCompleted ? TextDecoration.lineThrough : null, color: item.isCompleted ? Colors.grey : null)),
               subtitle: Text(item.category),
+              trailing: const Icon(Icons.list, color: Colors.teal), // Иконка списка
             ),
           ),
         );
