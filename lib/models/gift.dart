@@ -6,6 +6,7 @@ class Gift {
   bool isBought;
   String? note;
   String? photoPath;
+  String? reservedBy; // Новое поле для брони
 
   Gift({
     this.id, 
@@ -14,7 +15,8 @@ class Gift {
     required this.category, 
     this.isBought = false, 
     this.note, 
-    this.photoPath
+    this.photoPath,
+    this.reservedBy,
   });
 
   Map<String, dynamic> toMap() => {
@@ -24,7 +26,8 @@ class Gift {
     'category': category, 
     'isBought': isBought ? 1 : 0, 
     'note': note, 
-    'photo_path': photoPath
+    'photo_path': photoPath,
+    'reserved_by': reservedBy, // Сохраняем в базу
   };
   
   factory Gift.fromMap(Map<String, dynamic> map) => Gift(
@@ -34,6 +37,7 @@ class Gift {
     category: map['category'], 
     isBought: map['isBought'] == 1, 
     note: map['note'], 
-    photoPath: map['photo_path']
+    photoPath: map['photo_path'],
+    reservedBy: map['reserved_by'], // Читаем из базы
   );
 }
