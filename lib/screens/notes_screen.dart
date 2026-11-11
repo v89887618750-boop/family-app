@@ -41,7 +41,7 @@ class _NotesScreenState extends State<NotesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Заголовок (например: Wi-Fi)')),
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Заголовок (например: Рецепт борща)')),
                 const SizedBox(height: 8),
                 TextField(controller: contentController, decoration: const InputDecoration(labelText: 'Текст заметки'), maxLines: 4),
                 const SizedBox(height: 16),
