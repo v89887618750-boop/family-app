@@ -18,9 +18,23 @@ class GiftsScreen extends StatefulWidget {
 
 class _GiftsScreenState extends State<GiftsScreen> {
   List<Gift> _gifts = [];
+  List<String> _familyNames = []; // Список имен для выбора
 
   @override
-  void initState() { super.initState(); _loadGifts(); }
+  void initState() { 
+    super.initState(); 
+    _loadGifts(); 
+    _loadFamilyNames();
+  }
+
+  Future<void> _loadFamilyNames() async {
+    final db = await DatabaseHelper.instance.database;
+    final maps = await db.query('family_members');
+    final names = maps.map((e) => e['name'] as String).toList();
+    // Добавляем "Общее" на случай, если хочется подарить что-то семье
+    if (!names.contains('Общее')) names.add('Общее');
+    setState(() => _familyNames = names);
+  }
 
   Future<void> _loadGifts() async {
     final db = await DatabaseHelper.instance.database;
@@ -36,7 +50,9 @@ class _GiftsScreenState extends State<GiftsScreen> {
   void _showAddEditDialog({Gift? item}) {
     final titleController = TextEditingController(text: item?.title ?? '');
     final noteController = TextEditingController(text: item?.note ?? '');
-    String targetForWhom = item?.forWhom ?? widget.filterForWhom ?? 'Общее';
+    
+    // Если мы зашли из профиля ДР, подставляем имя. Иначе - первое из списка или 'Общее'
+    String targetForWhom = item?.forWhom ?? widget.filterForWhom ?? (_familyNames.isNotEmpty ? _familyNames.first : 'Общее');
     String? photoPath = item?.photoPath;
 
     showDialog(
@@ -57,8 +73,30 @@ class _GiftsScreenState extends State<GiftsScreen> {
                   },
                   icon: const Icon(Icons.photo), label: const Text('Выбрать фото'),
                 ),
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Что подарить?')),
-                TextField(controller: noteController, decoration: const InputDecoration(labelText: 'Описание'), maxLines: 2),
+                TextField(
+                  controller: titleController, 
+                  decoration: const InputDecoration(labelText: 'Что подарить? (или ссылка)'),
+                ),
+                TextField(
+                  controller: noteController, 
+                  decoration: const InputDecoration(labelText: 'Описание (размер, цвет, пожелания)'),
+                  maxLines: 2,
+                ),
+                
+                const SizedBox(height: 16),
+                // ВЫБОР ЧЛЕНА СЕМЬИ (только если мы не в профиле конкретного человека)
+                if (widget.filterForWhom == null) 
+                  DropdownButtonFormField<String>(
+                    value: targetForWhom,
+                    decoration: const InputDecoration(labelText: 'Для кого желание?'),
+                    items: _familyNames.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
+                    onChanged: (v) => setDialogState(() => targetForWhom = v!),
+                  )
+                else
+                   Padding(
+                     padding: const EdgeInsets.only(top: 16),
+                     child: Text('Список: ${widget.filterForWhom}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+                   )
               ],
             ),
           ),
@@ -66,10 +104,9 @@ class _GiftsScreenState extends State<GiftsScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () async {
-                // Проверка: если название пустое, показываем сообщение и НЕ ЗАКРЫВАЕМ окно
                 if (titleController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Пожалуйста, напишите, что подарить!')),
+                    const SnackBar(content: Text('Напишите, что подарить!')),
                   );
                   return;
                 }
@@ -150,7 +187,7 @@ class _GiftsScreenState extends State<GiftsScreen> {
                     if (widget.filterForWhom != null && widget.avatarPath != null && File(widget.avatarPath!).existsSync())
                       CircleAvatar(radius: 20, backgroundImage: FileImage(File(widget.avatarPath!)))
                     else
-                      CircleAvatar(radius: 20, backgroundColor: Colors.teal.shade100, child: Text(entry.key[0].toUpperCase())),
+                      CircleAvatar(radius: 20, backgroundColor: Colors.teal.shade100, child: Text(entry.key.isNotEmpty ? entry.key[0].toUpperCase() : '?')),
                     const SizedBox(width: 12),
                     Text(entry.key == 'Общее' ? 'Общие желания' : 'Wishlist: ${entry.key}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
                   ],
