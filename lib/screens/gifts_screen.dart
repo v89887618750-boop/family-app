@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
 import '../models/gift.dart';
 
@@ -20,21 +19,12 @@ class GiftsScreen extends StatefulWidget {
 class _GiftsScreenState extends State<GiftsScreen> {
   List<Gift> _gifts = [];
   List<String> _familyNames = [];
-  String _currentUserName = 'Я'; // Кто сейчас пользуется приложением
 
   @override
   void initState() { 
     super.initState(); 
-    _loadUser();
     _loadGifts(); 
     _loadFamilyNames();
-  }
-
-  Future<void> _loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _currentUserName = prefs.getString('my_name') ?? 'Я';
-    });
   }
 
   Future<void> _loadFamilyNames() async {
@@ -59,7 +49,6 @@ class _GiftsScreenState extends State<GiftsScreen> {
   void _showAddEditDialog({Gift? item}) {
     final titleController = TextEditingController(text: item?.title ?? '');
     final noteController = TextEditingController(text: item?.note ?? '');
-    
     String targetForWhom = item?.forWhom ?? widget.filterForWhom ?? (_familyNames.isNotEmpty ? _familyNames.first : 'Общее');
     String? photoPath = item?.photoPath;
 
@@ -90,7 +79,6 @@ class _GiftsScreenState extends State<GiftsScreen> {
                   decoration: const InputDecoration(labelText: 'Описание (размер, цвет, пожелания)'),
                   maxLines: 2,
                 ),
-                
                 const SizedBox(height: 16),
                 if (widget.filterForWhom == null) 
                   DropdownButtonFormField<String>(
@@ -112,36 +100,26 @@ class _GiftsScreenState extends State<GiftsScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (titleController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Напишите, что подарить!')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Напишите, что подарить!')));
                   return;
                 }
-                
                 final db = await DatabaseHelper.instance.database;
                 final gift = Gift(
                   title: titleController.text.trim(), 
                   forWhom: targetForWhom, 
                   category: 'Подарок', 
-                  isBought: item?.isBought ?? false,
-                  note: noteController.text.trim(),
+                  isBought: item?.isBought ?? false, 
+                  note: noteController.text.trim(), 
                   photoPath: photoPath,
-                  reservedBy: item?.reservedBy // Сохраняем старую бронь, если была
+                  reservedBy: item?.reservedBy // Сохраняем резерв, если был
                 );
-                
-                try {
-                  if (item == null) {
-                    await db.insert('gifts', gift.toMap());
-                  } else {
-                    await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [item.id]);
-                  }
-                  if (mounted) Navigator.pop(context);
-                  _loadGifts();
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка сохранения: $e')),
-                  );
+                if (item == null) {
+                  await db.insert('gifts', gift.toMap());
+                } else {
+                  await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [item.id]);
                 }
+                if (mounted) Navigator.pop(context);
+                _loadGifts();
               },
               child: const Text('Сохранить'),
             ),
@@ -149,25 +127,6 @@ class _GiftsScreenState extends State<GiftsScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _toggleReservation(Gift gift) async {
-    final db = await DatabaseHelper.instance.database;
-    String? newReservedBy;
-
-    if (gift.reservedBy == _currentUserName) {
-      // Если я забронировал, то отменяю
-      newReservedBy = null; 
-    } else if (gift.reservedBy == null) {
-      // Если свободно, бронирую на себя
-      newReservedBy = _currentUserName;
-    } else {
-      // Если забронировал кто-то другой, ничего не делаем
-      return; 
-    }
-
-    await db.update('gifts', {'reserved_by': newReservedBy}, where: 'id = ?', whereArgs: [gift.id]);
-    _loadGifts();
   }
 
   Future<void> _confirmDelete(Gift gift) async {
@@ -201,8 +160,16 @@ class _GiftsScreenState extends State<GiftsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.filterForWhom != null ? 'Wishlist: ${widget.filterForWhom}' : 'Все Wishlist-ы')),
-      body: _gifts.isEmpty ? const Center(child: Text('Список желаний пуст')) : ListView(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Icon(Icons.card_giftcard, color: Colors.teal),
+            const SizedBox(width: 8),
+            Text(widget.filterForWhom != null ? 'Wishlist: ${widget.filterForWhom}' : 'Семейный Wishlist'),
+          ],
+        ),
+      ),
+      body: _gifts.isEmpty ? const Center(child: Text('Список желаний пуст. Нажмите +, чтобы добавить!')) : ListView(
         children: groupedGifts.entries.map((entry) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,99 +187,64 @@ class _GiftsScreenState extends State<GiftsScreen> {
                   ],
                 ),
               ),
-              ...entry.value.map((gift) {
-                bool isReservedByMe = gift.reservedBy == _currentUserName;
-                bool isReservedByOther = gift.reservedBy != null && !isReservedByMe;
-                
-                return Slidable(
-                  key: Key(gift.id.toString()),
-                  endActionPane: ActionPane(
-                    motion: const DrawerMotion(),
-                    extentRatio: 0.25,
-                    children: [
-                      SlidableAction(
-                        onPressed: (context) => _confirmDelete(gift), 
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        icon: Icons.delete,
-                        label: 'Удалить',
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ],
-                  ),
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: ListTile(
-                      onTap: () => _showAddEditDialog(item: gift),
-                      leading: gift.photoPath != null && File(gift.photoPath!).existsSync()
-                          ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(gift.photoPath!), width: 50, height: 50, fit: BoxFit.cover))
-                          : Checkbox(
-                              value: gift.isBought,
-                              // Если подарок забронирован другим, мы не даем его купить
-                              onChanged: isReservedByOther ? null : (_) async {
-                                final db = await DatabaseHelper.instance.database;
-                                gift.isBought = !gift.isBought;
-                                await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [gift.id]);
-                                _loadGifts();
-                              },
-                            ),
-                      title: Text(gift.title, style: TextStyle(decoration: gift.isBought ? TextDecoration.lineThrough : null, color: gift.isBought ? Colors.grey : null)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (gift.note != null && gift.note!.isNotEmpty) Text(gift.note!, style: const TextStyle(fontSize: 12)),
-                          
-                          // ПЛАШКА БРОНИРОВАНИЯ
-                          if (isReservedByMe)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 4),
-                              child: Text('✅ Забронировано: Вы', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-                            )
-                          else if (isReservedByOther)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text('🔒 Забронировано: ${gift.reservedBy}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12)),
-                            ),
-
-                          if (gift.title.startsWith('http') || (gift.note?.startsWith('http') ?? false))
-                            InkWell(
-                              onTap: () async {
-                                final url = Uri.parse(gift.title.startsWith('http') ? gift.title : gift.note!);
-                                if (await canLaunchUrl(url)) launchUrl(url);
-                              },
-                              child: const Text('Открыть ссылку', style: TextStyle(color: Colors.blue, fontSize: 12)),
-                            ),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // КНОПКА БРОНИРОВАНИЯ
-                          if (!gift.isBought)
-                            IconButton(
-                              icon: Icon(
-                                isReservedByMe ? Icons.bookmark : Icons.bookmark_border,
-                                color: isReservedByOther ? Colors.grey : Colors.teal,
-                              ),
-                              tooltip: isReservedByMe ? 'Отменить бронь' : 'Забронировать',
-                              onPressed: isReservedByOther ? null : () => _toggleReservation(gift),
-                            ),
-                          
-                          Checkbox( 
+              ...entry.value.map((gift) => Slidable(
+                key: Key(gift.id.toString()),
+                endActionPane: ActionPane(
+                  motion: const DrawerMotion(),
+                  extentRatio: 0.25,
+                  children: [
+                    SlidableAction(
+                      onPressed: (context) => _confirmDelete(gift), 
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete,
+                      label: 'Удалить',
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ],
+                ),
+                child: Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: ListTile(
+                    onTap: () => _showAddEditDialog(item: gift),
+                    leading: gift.photoPath != null && File(gift.photoPath!).existsSync()
+                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(gift.photoPath!), width: 50, height: 50, fit: BoxFit.cover))
+                        : Checkbox(
                             value: gift.isBought,
-                            onChanged: isReservedByOther ? null : (_) async {
+                            onChanged: (_) async {
                               final db = await DatabaseHelper.instance.database;
                               gift.isBought = !gift.isBought;
                               await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [gift.id]);
                               _loadGifts();
                             },
                           ),
-                        ],
-                      ),
+                    title: Text(gift.title, style: TextStyle(decoration: gift.isBought ? TextDecoration.lineThrough : null, color: gift.isBought ? Colors.grey : null)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (gift.note != null && gift.note!.isNotEmpty) Text(gift.note!, style: const TextStyle(fontSize: 12)),
+                        if (gift.title.startsWith('http') || (gift.note?.startsWith('http') ?? false))
+                          InkWell(
+                            onTap: () async {
+                              final url = Uri.parse(gift.title.startsWith('http') ? gift.title : gift.note!);
+                              if (await canLaunchUrl(url)) launchUrl(url);
+                            },
+                            child: const Text('Открыть ссылку', style: TextStyle(color: Colors.blue, fontSize: 12)),
+                          ),
+                      ],
+                    ),
+                    trailing: Checkbox( 
+                      value: gift.isBought,
+                      onChanged: (_) async {
+                        final db = await DatabaseHelper.instance.database;
+                        gift.isBought = !gift.isBought;
+                        await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [gift.id]);
+                        _loadGifts();
+                      },
                     ),
                   ),
-                );
-              }),
+                ),
+              )),
             ],
           );
         }).toList(),
