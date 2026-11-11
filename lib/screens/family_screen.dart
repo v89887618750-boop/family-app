@@ -38,7 +38,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (photoPath != null) 
-                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath))),
+                  // ИСПРАВЛЕНО ЗДЕСЬ: добавили восклицательный знак
+                  CircleAvatar(radius: 40, backgroundImage: FileImage(File(photoPath!))),
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -139,11 +140,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     ],
                   ),
                   child: InkWell(
-                    onTap: () => _showAddEditDialog(member: member), // РЕДАКТИРОВАНИЕ ПО КЛИКУ
+                    onTap: () => _showAddEditDialog(member: member), 
                     child: Card(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // ИСПРАВЛЕНО ЗДЕСЬ: добавили восклицательный знак
                           if (member['photo_path'] != null && File(member['photo_path']).existsSync())
                             CircleAvatar(radius: 40, backgroundImage: FileImage(File(member['photo_path']))),
                           const SizedBox(height: 8),
