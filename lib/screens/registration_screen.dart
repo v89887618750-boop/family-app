@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -18,38 +17,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _nameController = TextEditingController();
   final _patronymicController = TextEditingController();
   final _maidenNameController = TextEditingController();
-  final _dateController = TextEditingController();
   String? _photoPath;
 
-  // Вызов календаря через BottomSheet
-  void _pickDate() {
-    FocusScope.of(context).unfocus(); // Убираем клавиатуру
-    
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return SizedBox(
-          height: 350,
-          child: CalendarDatePicker(
-            initialDate: DateTime.now().subtract(const Duration(days: 365 * 25)),
-            firstDate: DateTime(1900),
-            lastDate: DateTime.now(),
-            onDateChanged: (DateTime picked) {
-              setState(() {
-                _dateController.text = DateFormat('dd-MM-yyyy').format(picked);
-              });
-              Navigator.pop(context); // Закрываем календарь после выбора
-            },
-          ),
-        );
-      },
-    );
-  }
+  // Переменные для даты
+  int? _selectedDay;
+  int? _selectedMonth;
+  int? _selectedYear;
+
+  final List<String> _months = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
 
   Future<void> _saveProfile() async {
     if (_surnameController.text.trim().isEmpty || 
         _nameController.text.trim().isEmpty || 
-        _dateController.text.trim().isEmpty) {
+        _selectedDay == null || _selectedMonth == null || _selectedYear == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Пожалуйста, заполните Фамилию, Имя и Дату рождения')),
       );
@@ -61,9 +44,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       fullName += ' ${_patronymicController.text.trim()}';
     }
 
+    // Форматируем дату в ДД-ММ-ГГГГ
+    String formattedDate = '${_selectedDay.toString().padLeft(2, '0')}-${_selectedMonth.toString().padLeft(2, '0')}-$_selectedYear';
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('my_name', fullName);
-    await prefs.setString('my_date', _dateController.text.trim());
+    await prefs.setString('my_date', formattedDate);
     if (_photoPath != null) await prefs.setString('my_photo', _photoPath!);
 
     final db = await DatabaseHelper.instance.database;
@@ -83,23 +69,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.family_restroom, size: 80, color: Colors.teal),
               const SizedBox(height: 16),
-              const Text(
-                'Добро пожаловать!',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Давайте создадим ваш профиль для семейного древа',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
-              ),
+              const Text('Добро пожаловать!', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
               
-              // Аватарка
               GestureDetector(
                 onTap: () async {
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -114,67 +89,62 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Фамилия и Имя
               Row(
                 children: [
+                  Expanded(child: TextField(controller: _surnameController, decoration: const InputDecoration(labelText: 'Фамилия', border: OutlineInputBorder()))),
+                  const SizedBox(width: 12),
+                  Expanded(child: TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()))),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(controller: _patronymicController, decoration: const InputDecoration(labelText: 'Отчество', border: OutlineInputBorder())),
+              
+              const SizedBox(height: 24),
+              const Text('Дата рождения', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              
+              // ВЫПАДАЮЩИЕ СПИСКИ ДЛЯ ДАТЫ
+              Row(
+                children: [
+                  // День
                   Expanded(
-                    child: TextField(
-                      controller: _surnameController,
-                      decoration: const InputDecoration(labelText: 'Фамилия', border: OutlineInputBorder()),
+                    flex: 2,
+                    child: DropdownButtonFormField<int>(
+                      decoration: const InputDecoration(labelText: 'День', border: OutlineInputBorder()),
+                      value: _selectedDay,
+                      items: List.generate(31, (i) => i + 1).map((d) => DropdownMenuItem(value: d, child: Text('$d'))).toList(),
+                      onChanged: (v) => setState(() => _selectedDay = v),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
+                  // Месяц
                   Expanded(
-                    child: TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()),
+                    flex: 3,
+                    child: DropdownButtonFormField<int>(
+                      decoration: const InputDecoration(labelText: 'Месяц', border: OutlineInputBorder()),
+                      value: _selectedMonth,
+                      items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(value: m, child: Text(_months[m - 1]))).toList(),
+                      onChanged: (v) => setState(() => _selectedMonth = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Год
+                  Expanded(
+                    flex: 3,
+                    child: DropdownButtonFormField<int>(
+                      decoration: const InputDecoration(labelText: 'Год', border: OutlineInputBorder()),
+                      value: _selectedYear,
+                      items: List.generate(100, (i) => DateTime.now().year - i).map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
+                      onChanged: (v) => setState(() => _selectedYear = v),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              
-              // Отчество
-              TextField(
-                controller: _patronymicController,
-                decoration: const InputDecoration(labelText: 'Отчество (если есть)', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-
-              // Девичья фамилия
-              TextField(
-                controller: _maidenNameController,
-                decoration: const InputDecoration(labelText: 'Девичья фамилия (если есть)', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              
-              // Поле даты
-              InkWell(
-                onTap: _pickDate,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Дата рождения',
-                    border: OutlineInputBorder(),
-                    suffixIcon: Icon(Icons.calendar_today),
-                  ),
-                  child: Text(
-                    _dateController.text.isEmpty ? 'Нажмите, чтобы выбрать' : _dateController.text,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: _dateController.text.isEmpty ? Colors.grey : Colors.black87,
-                    ),
-                  ),
-                ),
-              ),
               
               const SizedBox(height: 32),
               SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _saveProfile,
-                  child: const Text('Создать профиль', style: TextStyle(fontSize: 18)),
-                ),
+                width: double.infinity, height: 50,
+                child: ElevatedButton(onPressed: _saveProfile, child: const Text('Создать профиль', style: TextStyle(fontSize: 18))),
               ),
             ],
           ),
