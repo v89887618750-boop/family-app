@@ -3,8 +3,7 @@ import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../models/purchase.dart';
-import '../utils/family_manager.dart';
-import '../utils/notification_service.dart'; // <-- ИМПОРТ УВЕДОМЛЕНИЙ
+import '../utils/notification_service.dart';
 
 class AddEditScreen extends StatefulWidget {
   final String type;
@@ -70,7 +69,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
   Future<void> _save() async {
     if (_titleController.text.trim().isEmpty) return;
     final db = await DatabaseHelper.instance.database;
-    final familyId = await FamilyManager.getFamilyId();
     
     String? dateToSave;
     if (_periodicity == 'Ежедневно') {
@@ -97,7 +95,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
       'due_time': timeToSave, 
       'reading_value': _isMeter ? _readingController.text : null,
       'note': widget.type == 'purchase' ? _noteController.text.trim() : null,
-      'family_id': familyId,
     };
 
     int? taskId;
@@ -108,7 +105,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
           periodicity: data['periodicity'] as String, dueDate: data['due_date'] as String?,
           dueTime: data['due_time'] as String?,
           readingValue: data['reading_value'] as String?,
-          familyId: familyId,
         ).toMap());
         
         if (_isMeter && _readingController.text.isNotEmpty) {
@@ -124,7 +120,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
           category: data['category'] as String, 
           periodicity: data['periodicity'] as String,
           note: data['note'] as String?,
-          familyId: familyId,
         ).toMap());
       }
     } else {
@@ -135,10 +130,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
     // --- ЛОГИКА УВЕДОМЛЕНИЙ ---
     if (widget.type == 'task' && taskId != null && timeToSave != null && dateToSave != null) {
       try {
-        // Отменяем старое уведомление, если оно было
         await NotificationService.cancelNotification(taskId);
         
-        // Парсим дату и время для будильника
         final partsDate = dateToSave.split('-');
         final partsTime = timeToSave.split(':');
         final scheduledDateTime = DateTime(
@@ -149,7 +142,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
           int.parse(partsTime[1])
         );
 
-        // Если время еще не прошло, ставим уведомление
         if (scheduledDateTime.isAfter(DateTime.now())) {
           await NotificationService.scheduleNotification(
             id: taskId,
