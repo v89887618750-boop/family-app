@@ -5,8 +5,9 @@ class Task {
   final String periodicity;
   bool isCompleted;
   String? dueDate;
-  String? dueTime; // Новое поле для времени (например, "15:00")
-  String? readingValue; 
+  String? dueTime;
+  String? readingValue;
+  String? familyId; // <-- ДОБАВЛЕНО: ID семьи
 
   Task({
     this.id, 
@@ -17,6 +18,7 @@ class Task {
     this.dueDate,
     this.dueTime,
     this.readingValue,
+    this.familyId, // <-- Добавлено в конструктор
   });
 
   Map<String, dynamic> toMap() => {
@@ -28,6 +30,7 @@ class Task {
     'due_date': dueDate,
     'due_time': dueTime,
     'reading_value': readingValue,
+    'family_id': familyId, // <-- Передаем в базу
   };
   
   factory Task.fromMap(Map<String, dynamic> map) => Task(
@@ -39,5 +42,6 @@ class Task {
     dueDate: map['due_date'],
     dueTime: map['due_time'],
     readingValue: map['reading_value'],
+    familyId: map['family_id'], // <-- Читаем из базы
   );
 }
