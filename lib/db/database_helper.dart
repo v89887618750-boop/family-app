@@ -16,8 +16,8 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    // Версия 13: Убрали family_id, вернули простую структуру
-    return await openDatabase(path, version: 13, onCreate: _createDB, onUpgrade: _upgradeDB);
+    // Версия 14: добавлено фото для заметок
+    return await openDatabase(path, version: 14, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future _createDB(Database db, int version) async {
@@ -53,9 +53,10 @@ class DatabaseHelper {
       birthday_id INTEGER, photo_path TEXT, FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
     )''');
 
+    // Добавили photo_path в заметки
     await db.execute('''CREATE TABLE notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL, 
-      date TEXT NOT NULL, color INTEGER DEFAULT 0, category TEXT
+      date TEXT NOT NULL, color INTEGER DEFAULT 0, category TEXT, photo_path TEXT
     )''');
     
     for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
@@ -88,6 +89,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 13) {
       try { await db.execute('ALTER TABLE notes ADD COLUMN category TEXT'); } catch (e) {}
+    }
+    if (oldVersion < 14) {
+      try { await db.execute('ALTER TABLE notes ADD COLUMN photo_path TEXT'); } catch (e) {}
     }
   }
 
