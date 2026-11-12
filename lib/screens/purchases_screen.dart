@@ -4,6 +4,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
 import '../models/purchase.dart';
+import '../utils/family_manager.dart'; // Импортируем менеджер
 import 'add_edit_screen.dart';
 
 class PurchasesScreen extends StatefulWidget {
@@ -17,13 +18,19 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
   List<String> _categories = [];
   late TabController _tabController;
   late ConfettiController _confettiController;
+  String _familyId = '';
 
   @override
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 3, vsync: this); 
     _confettiController = ConfettiController(duration: const Duration(seconds: 2));
-    _loadData(); 
+    _initFamily();
+  }
+
+  Future<void> _initFamily() async {
+    _familyId = await FamilyManager.getFamilyId();
+    _loadData();
   }
 
   @override
@@ -35,8 +42,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _loadData() async {
     final db = await DatabaseHelper.instance.database;
-    final catMaps = await db.query('categories');
-    final pMaps = await db.query('purchases');
+    final catMaps = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
+    final pMaps = await db.query('purchases', where: 'family_id = ?', whereArgs: [_familyId]);
     setState(() {
       _categories = catMaps.map((e) => e['name'] as String).toList();
       _allPurchases = pMaps.map((e) => Purchase.fromMap(e)).toList();
@@ -56,7 +63,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _clearCompleted() async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('purchases', where: 'isCompleted = 1');
+    await db.delete('purchases', where: 'isCompleted = 1 AND family_id = ?', whereArgs: [_familyId]);
     _loadData();
   }
 
@@ -77,72 +84,6 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
       await db.delete('purchases', where: 'id = ?', whereArgs: [item.id]);
       _loadData();
     }
-  }
-
-  // Окно с чек-листом
-  void _showItemsChecklist(Purchase item) {
-    final List<String> currentItems = List.from(item.itemsList);
-    
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(item.title), // Название магазина
-          content: SizedBox(
-            width: double.maxFinite,
-            child: currentItems.isEmpty 
-              ? const Text('Список пуст. Добавьте продукты!')
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: currentItems.length,
-                  itemBuilder: (context, index) {
-                    return CheckboxListTile(
-                      title: Text(currentItems[index]),
-                      value: false, // Галочка только визуальная для чек-листа
-                      onChanged: (val) {
-                        // Можно добавить логику "куплено"
-                      },
-                    );
-                  },
-                ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                // Здесь можно добавить логику добавления нового продукта
-                final controller = TextEditingController();
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Добавить продукт'),
-                    content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Например: Хлеб')),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-                      TextButton(
-                        onPressed: () async {
-                          if (controller.text.isNotEmpty) {
-                            setDialogState(() => currentItems.add(controller.text));
-                            Navigator.pop(context);
-                            
-                            // Сохраняем обновленный список в базу
-                            final db = await DatabaseHelper.instance.database;
-                            item.itemsList = currentItems;
-                            await db.update('purchases', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
-                          }
-                        },
-                        child: const Text('Добавить'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              child: const Text('+ Добавить'),
-            ),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
-          ],
-        ),
-      ),
-    );
   }
 
   List<Purchase> _getFilteredPurchases(String filter) {
@@ -193,7 +134,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
           child: Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
-              onTap: () => _showItemsChecklist(item), // При нажатии открываем чек-лист!
+              onTap: () => _openAddEdit(item: item),
               leading: Checkbox(
                 value: item.isCompleted,
                 onChanged: (_) async {
@@ -212,8 +153,17 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
                 },
               ),
               title: Text(item.title, style: TextStyle(decoration: item.isCompleted ? TextDecoration.lineThrough : null, color: item.isCompleted ? Colors.grey : null)),
-              subtitle: Text(item.category),
-              trailing: const Icon(Icons.list, color: Colors.teal), // Иконка списка
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.category),
+                  if (item.note != null && item.note!.isNotEmpty)
+                    Text(
+                      item.note!,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                    ),
+                ],
+              ),
             ),
           ),
         );
