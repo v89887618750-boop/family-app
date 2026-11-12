@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
-import '../utils/family_manager.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final VoidCallback onRegistrationComplete;
@@ -29,7 +28,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ];
 
-  Future<void> _saveProfile({String? overrideFamilyId}) async {
+  Future<void> _saveProfile() async {
     if (_surnameController.text.trim().isEmpty || 
         _nameController.text.trim().isEmpty || 
         _selectedDay == null || _selectedMonth == null || _selectedYear == null) {
@@ -37,12 +36,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         const SnackBar(content: Text('Пожалуйста, заполните Фамилию, Имя и Дату рождения')),
       );
       return;
-    }
-
-    // Если передан overrideFamilyId, используем его (для входа по коду)
-    final familyId = overrideFamilyId ?? await FamilyManager.getFamilyId();
-    if (overrideFamilyId != null) {
-      await FamilyManager.setFamilyId(overrideFamilyId);
     }
 
     String fullName = '${_surnameController.text.trim()} ${_nameController.text.trim()}';
@@ -62,9 +55,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     final db = await DatabaseHelper.instance.database;
     
-    // 1. Создаем запись в Днях рождения
     int bdayId = await db.insert('birthdays', {
-      'family_id': familyId,
       'name': fullName,
       'date': formattedDate,
       'category': 'Я',
@@ -72,9 +63,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       'photo_path': _photoPath,
     });
 
-    // 2. Создаем запись в Семье
     await db.insert('family_members', {
-      'family_id': familyId,
       'name': fullName,
       'relation': 'Я',
       'photo_path': _photoPath,
@@ -82,32 +71,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
 
     widget.onRegistrationComplete();
-  }
-
-  void _showJoinFamilyDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Войти в семью'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Код семьи (например: 1111)'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-          ElevatedButton(
-            onPressed: () async {
-              if (controller.text.trim().isEmpty) return;
-              Navigator.pop(context);
-              // Входим в семью и создаем профиль
-              await _saveProfile(overrideFamilyId: controller.text.trim());
-            },
-            child: const Text('Войти'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -121,8 +84,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const Icon(Icons.family_restroom, size: 80, color: Colors.teal),
               const SizedBox(height: 16),
               const Text('Добро пожаловать!', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Создайте свой профиль или войдите в существующую семью', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
               
               GestureDetector(
@@ -192,12 +153,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity, height: 50,
-                child: ElevatedButton(onPressed: () => _saveProfile(), child: const Text('Создать профиль', style: TextStyle(fontSize: 18))),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: _showJoinFamilyDialog,
-                child: const Text('У меня уже есть код семьи (Войти)'),
+                child: ElevatedButton(onPressed: _saveProfile, child: const Text('Создать профиль', style: TextStyle(fontSize: 18))),
               ),
             ],
           ),
