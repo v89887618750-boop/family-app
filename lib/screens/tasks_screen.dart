@@ -4,7 +4,7 @@ import 'package:confetti/confetti.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../widgets/item_tile.dart';
-import '../utils/family_manager.dart'; // Импортируем менеджер семьи
+import '../utils/family_manager.dart';
 import 'add_edit_screen.dart';
 import 'meter_stats_screen.dart';
 
@@ -19,7 +19,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   List<String> _categories = [];
   late TabController _tabController;
   late ConfettiController _confettiController;
-  String _familyId = ''; // ID текущей семьи
+  String _familyId = '';
 
   @override
   void initState() { 
@@ -31,6 +31,17 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _initFamily() async {
     _familyId = await FamilyManager.getFamilyId();
+    
+    // Автоматически создаем базовые категории, если их нет для этой семьи
+    final db = await DatabaseHelper.instance.database;
+    final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
+    
+    if (existingCats.isEmpty) {
+      for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
+        await db.insert('categories', {'family_id': _familyId, 'name': cat});
+      }
+    }
+    
     _loadData();
   }
 
@@ -43,7 +54,6 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _loadData() async {
     final db = await DatabaseHelper.instance.database;
-    // Загружаем категории и задачи ТОЛЬКО для текущей семьи
     final catMaps = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
     final taskMaps = await db.query('tasks', where: 'family_id = ?', whereArgs: [_familyId]);
     setState(() {
@@ -54,7 +64,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _openAddEdit({Task? task}) async {
     if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сначала добавьте категорию в настройках')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ошибка загрузки категорий')));
       return;
     }
     final result = await Navigator.push(context, MaterialPageRoute(
