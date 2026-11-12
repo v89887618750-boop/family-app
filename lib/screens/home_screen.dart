@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'tasks_screen.dart';
 import 'purchases_screen.dart';
 import 'family_screen.dart';
-import 'notes_screen.dart'; // Новый экран
+import 'notes_screen.dart';
+import 'calendar_screen.dart'; // <-- НОВЫЙ ИМПОРТ
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,9 +23,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final screens = [
       const TasksScreen(),
+      const CalendarScreen(), // <-- КАЛЕНДАРЬ
       const PurchasesScreen(),
       const FamilyScreen(),
-      const NotesScreen(), // <-- ЭКРАН ЗАМЕТОК
+      const NotesScreen(),
       SettingsScreen(onThemeChanged: widget.onThemeChanged, onFontSizeChanged: widget.onFontSizeChanged),
     ];
 
@@ -32,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (index) {
           setState(() {
             _currentIndex = index;
@@ -39,9 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.task), label: 'Дела'),
+          NavigationDestination(icon: Icon(Icons.calendar_month), label: 'Календарь'),
           NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'Покупки'),
           NavigationDestination(icon: Icon(Icons.family_restroom), label: 'Семья'),
-          NavigationDestination(icon: Icon(Icons.note), label: 'Заметки'), // <-- Иконка заметок
+          NavigationDestination(icon: Icon(Icons.note), label: 'Заметки'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Настройки'),
         ],
       ),
