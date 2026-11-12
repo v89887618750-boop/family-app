@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../models/purchase.dart';
+import '../utils/family_manager.dart'; // Импортируем менеджер семьи
 
 class AddEditScreen extends StatefulWidget {
   final String type;
@@ -17,10 +18,11 @@ class AddEditScreen extends StatefulWidget {
 
 class _AddEditScreenState extends State<AddEditScreen> {
   final _titleController = TextEditingController();
+  final _noteController = TextEditingController();
   late String _selectedCategory;
   String _periodicity = 'Разово';
   DateTime? _dueDate;
-  TimeOfDay? _dueTime; // Время дедлайна
+  TimeOfDay? _dueTime; 
   
   bool _isMeter = false;
   final _readingController = TextEditingController();
@@ -42,11 +44,14 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _selectedCategory = widget.item.category;
       _periodicity = widget.item.periodicity;
       
+      if (widget.type == 'purchase' && widget.item.note != null) {
+        _noteController.text = widget.item.note;
+      }
+      
       if (widget.item.dueDate != null) {
         _dueDate = DateTime.tryParse(widget.item.dueDate);
       }
       
-      // Восстанавливаем время, если оно было сохранено
       if (widget.item.dueTime != null && widget.item.dueTime!.contains(':')) {
         final parts = widget.item.dueTime!.split(':');
         _dueTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
@@ -64,6 +69,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   Future<void> _save() async {
     if (_titleController.text.trim().isEmpty) return;
     final db = await DatabaseHelper.instance.database;
+    final familyId = await FamilyManager.getFamilyId(); // Получаем ID семьи
     
     String? dateToSave;
     if (_periodicity == 'Ежедневно') {
@@ -76,7 +82,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
       dateToSave = _dueDate != null ? _dueDate!.toIso8601String().split('T')[0] : null;
     }
 
-    // Форматируем время в строку "ЧЧ:ММ"
     String? timeToSave;
     if (_dueTime != null) {
       timeToSave = '${_dueTime!.hour.toString().padLeft(2, '0')}:${_dueTime!.minute.toString().padLeft(2, '0')}';
@@ -88,8 +93,10 @@ class _AddEditScreenState extends State<AddEditScreen> {
       'periodicity': _periodicity,
       'isCompleted': widget.item?.isCompleted == true ? 1 : 0,
       'due_date': dateToSave,
-      'due_time': timeToSave, // Сохраняем время
+      'due_time': timeToSave, 
       'reading_value': _isMeter ? _readingController.text : null,
+      'note': widget.type == 'purchase' ? _noteController.text.trim() : null,
+      'family_id': familyId, // <-- ДОБАВЛЕНО: привязка к семье
     };
 
     if (widget.item == null) {
@@ -98,7 +105,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
           title: data['title'] as String, category: data['category'] as String, 
           periodicity: data['periodicity'] as String, dueDate: data['due_date'] as String?,
           dueTime: data['due_time'] as String?,
-          readingValue: data['reading_value'] as String?
+          readingValue: data['reading_value'] as String?,
+          familyId: familyId, // Передаем ID
         ).toMap());
         
         if (_isMeter && _readingController.text.isNotEmpty) {
@@ -109,7 +117,13 @@ class _AddEditScreenState extends State<AddEditScreen> {
           });
         }
       } else {
-        await db.insert('purchases', Purchase(title: data['title'] as String, category: data['category'] as String, periodicity: data['periodicity'] as String).toMap());
+        await db.insert('purchases', Purchase(
+          title: data['title'] as String, 
+          category: data['category'] as String, 
+          periodicity: data['periodicity'] as String,
+          note: data['note'] as String?,
+          familyId: familyId, // Передаем ID
+        ).toMap());
       }
     } else {
       await db.update(widget.type == 'task' ? 'tasks' : 'purchases', data, where: 'id = ?', whereArgs: [widget.item.id]);
@@ -138,6 +152,18 @@ class _AddEditScreenState extends State<AddEditScreen> {
               const SizedBox(height: 16),
 
               if (widget.type == 'purchase') ...[
+                TextField(
+                  controller: _noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Комментарий (например: жидкое, 2 шт., без запаха)',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              if (widget.type == 'purchase') ...[
                 const Text('Когда планируем купить?', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Wrap(
@@ -163,7 +189,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
               const SizedBox(height: 16),
 
-              // Выбор ДАТЫ (только для задач)
               if (widget.type == 'task' && _periodicity != 'Ежедневно')
                 ListTile(
                   title: Text(_dueDate == null ? 'Установить дату' : 'Дата: ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year}'),
@@ -180,7 +205,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   },
                 ),
 
-              // НОВЫЙ БЛОК: Выбор ВРЕМЕНИ (только для разовых задач)
               if (widget.type == 'task' && _periodicity == 'Разово')
                 ListTile(
                   title: Text(_dueTime == null ? 'Установить время' : 'Время: ${_dueTime!.hour.toString().padLeft(2, '0')}:${_dueTime!.minute.toString().padLeft(2, '0')}'),
@@ -195,7 +219,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   },
                 ),
               
-              // Блок счетчиков
               if (widget.type == 'task' && _homeCategories.contains(_selectedCategory)) ...[
                 const Divider(),
                 SwitchListTile(
