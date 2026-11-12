@@ -4,10 +4,9 @@ import 'package:confetti/confetti.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../widgets/item_tile.dart';
-import '../utils/family_manager.dart';
 import 'add_edit_screen.dart';
 import 'meter_stats_screen.dart';
-import 'calendar_screen.dart'; // <-- ИМПОРТ КАЛЕНДАРЯ
+import 'calendar_screen.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
@@ -20,29 +19,12 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   List<String> _categories = [];
   late TabController _tabController;
   late ConfettiController _confettiController;
-  String _familyId = ''; 
 
   @override
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 4, vsync: this); 
     _confettiController = ConfettiController(duration: const Duration(seconds: 2)); 
-    _initFamily();
-  }
-
-  Future<void> _initFamily() async {
-    _familyId = await FamilyManager.getFamilyId();
-    
-    // Проверяем, есть ли категории для этой семьи. Если нет — создаем.
-    final db = await DatabaseHelper.instance.database;
-    final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
-    
-    if (existingCats.isEmpty) {
-      for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
-        await db.insert('categories', {'family_id': _familyId, 'name': cat});
-      }
-    }
-    
     _loadData();
   }
 
@@ -55,8 +37,8 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _loadData() async {
     final db = await DatabaseHelper.instance.database;
-    final catMaps = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
-    final taskMaps = await db.query('tasks', where: 'family_id = ?', whereArgs: [_familyId]);
+    final catMaps = await db.query('categories');
+    final taskMaps = await db.query('tasks');
     setState(() {
       _categories = catMaps.map((e) => e['name'] as String).toList();
       _allTasks = taskMaps.map((e) => Task.fromMap(e)).toList();
@@ -76,7 +58,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _clearCompleted() async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('tasks', where: 'isCompleted = 1 AND family_id = ?', whereArgs: [_familyId]);
+    await db.delete('tasks', where: 'isCompleted = 1');
     _loadData();
   }
 
@@ -220,18 +202,13 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       appBar: AppBar(
         title: const Text('Список дел'),
         actions: [
-          // Кнопка Календаря
           IconButton(
             icon: const Icon(Icons.calendar_month, color: Colors.teal),
             tooltip: 'Календарь',
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CalendarScreen()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarScreen()));
             },
           ),
-          // Кнопка очистки
           IconButton(
             icon: const Icon(Icons.cleaning_services),
             tooltip: 'Очистить выполненные',
