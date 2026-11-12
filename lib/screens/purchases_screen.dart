@@ -4,7 +4,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
 import '../models/purchase.dart';
-import '../utils/family_manager.dart'; // Импортируем менеджер
+import '../utils/family_manager.dart';
 import 'add_edit_screen.dart';
 
 class PurchasesScreen extends StatefulWidget {
@@ -30,6 +30,17 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _initFamily() async {
     _familyId = await FamilyManager.getFamilyId();
+    
+    // Проверяем, есть ли категории для этой семьи. Если нет — создаем.
+    final db = await DatabaseHelper.instance.database;
+    final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
+    
+    if (existingCats.isEmpty) {
+      for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
+        await db.insert('categories', {'family_id': _familyId, 'name': cat});
+      }
+    }
+    
     _loadData();
   }
 
@@ -52,7 +63,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _openAddEdit({Purchase? item}) async {
     if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сначала добавьте категорию в настройках')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ошибка загрузки категорий')));
       return;
     }
     final result = await Navigator.push(context, MaterialPageRoute(
