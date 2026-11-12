@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
-import '../utils/family_manager.dart'; // Импортируем менеджер
+import '../utils/family_manager.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final VoidCallback onRegistrationComplete;
@@ -29,7 +29,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ];
 
-  Future<void> _saveProfile() async {
+  Future<void> _saveProfile({String? overrideFamilyId}) async {
     if (_surnameController.text.trim().isEmpty || 
         _nameController.text.trim().isEmpty || 
         _selectedDay == null || _selectedMonth == null || _selectedYear == null) {
@@ -37,6 +37,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         const SnackBar(content: Text('Пожалуйста, заполните Фамилию, Имя и Дату рождения')),
       );
       return;
+    }
+
+    // Если передан overrideFamilyId, используем его (для входа по коду)
+    final familyId = overrideFamilyId ?? await FamilyManager.getFamilyId();
+    if (overrideFamilyId != null) {
+      await FamilyManager.setFamilyId(overrideFamilyId);
     }
 
     String fullName = '${_surnameController.text.trim()} ${_nameController.text.trim()}';
@@ -54,9 +60,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     await prefs.setString('my_date', formattedDate);
     if (_photoPath != null) await prefs.setString('my_photo', _photoPath!);
 
-    // Получаем ID семьи (создается автоматически при первом запуске)
-    final familyId = await FamilyManager.getFamilyId();
-    
     final db = await DatabaseHelper.instance.database;
     
     // 1. Создаем запись в Днях рождения
@@ -89,15 +92,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         title: const Text('Войти в семью'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(labelText: 'Код семьи (например: FAMILY-12345678)'),
+          decoration: const InputDecoration(labelText: 'Код семьи (например: 1111)'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
           ElevatedButton(
             onPressed: () async {
               if (controller.text.trim().isEmpty) return;
-              await FamilyManager.setFamilyId(controller.text.trim());
-              widget.onRegistrationComplete(); // Перезапускаем приложение под новым ID
+              Navigator.pop(context);
+              // Входим в семью и создаем профиль
+              await _saveProfile(overrideFamilyId: controller.text.trim());
             },
             child: const Text('Войти'),
           ),
@@ -121,7 +125,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const Text('Создайте свой профиль или войдите в существующую семью', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
               
-              // Выбор аватарки
               GestureDetector(
                 onTap: () async {
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -189,7 +192,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity, height: 50,
-                child: ElevatedButton(onPressed: _saveProfile, child: const Text('Создать профиль', style: TextStyle(fontSize: 18))),
+                child: ElevatedButton(onPressed: () => _saveProfile(), child: const Text('Создать профиль', style: TextStyle(fontSize: 18))),
               ),
               const SizedBox(height: 16),
               TextButton(
