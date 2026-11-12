@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'screens/home_screen.dart';
 import 'screens/registration_screen.dart';
+import 'utils/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
+
+  // Запрос разрешения на уведомления для Android 13+
+  final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
+
   runApp(const FamilyListsApp());
 }
 
@@ -18,7 +29,7 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
   bool _isDarkMode = false;
   double _fontSize = 1.0;
   bool _isLoading = true;
-  bool _isRegistered = false; // Прошел ли регистрацию
+  bool _isRegistered = false;
 
   @override
   void initState() {
@@ -31,7 +42,6 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
     setState(() {
       _isDarkMode = prefs.getBool('isDarkMode') ?? false;
       _fontSize = prefs.getDouble('fontSize') ?? 1.0;
-      // Проверяем, есть ли сохраненное имя (значит регистрация пройдена)
       _isRegistered = prefs.getString('my_name') != null;
       _isLoading = false;
     });
@@ -75,12 +85,11 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
           child: child!,
         );
       },
-      // Если не зарегистрирован — показываем Экран Регистрации
       home: _isRegistered 
           ? HomeScreen(onThemeChanged: toggleTheme, onFontSizeChanged: changeFontSize)
           : RegistrationScreen(
               onRegistrationComplete: () {
-                setState(() => _isRegistered = true); // Переключаем на главный экран
+                setState(() => _isRegistered = true);
               },
             ),
     );
