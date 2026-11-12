@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../db/database_helper.dart';
 
 class NotesScreen extends StatefulWidget {
@@ -13,7 +15,6 @@ class _NotesScreenState extends State<NotesScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  // Категории для семейных записей
   final List<String> _categories = ['Рецепт', 'Идея', 'Список', 'Памятка'];
 
   @override
@@ -51,6 +52,7 @@ class _NotesScreenState extends State<NotesScreen> {
     final contentController = TextEditingController(text: note != null ? note['content'] : '');
     String selectedCategory = note != null && note['category'] != null ? note['category'] : _categories[0];
     Color selectedColor = note != null ? Color(note['color']) : Colors.yellow.shade100;
+    String? photoPath = note != null ? note['photo_path'] : null;
 
     final colors = [
       Colors.yellow.shade100,
@@ -69,6 +71,17 @@ class _NotesScreenState extends State<NotesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Фото
+                if (photoPath != null)
+                  Image.file(File(photoPath), height: 100),
+                TextButton.icon(
+                  onPressed: () async {
+                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                    if (picked != null) setDialogState(() => photoPath = picked.path);
+                  },
+                  icon: const Icon(Icons.photo), label: const Text('Прикрепить фото'),
+                ),
+                
                 TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Заголовок (о чём заметка?)')),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
@@ -112,6 +125,7 @@ class _NotesScreenState extends State<NotesScreen> {
                   'category': selectedCategory,
                   'date': DateTime.now().toIso8601String(),
                   'color': selectedColor.value,
+                  'photo_path': photoPath,
                 };
 
                 if (note == null) {
@@ -192,24 +206,36 @@ class _NotesScreenState extends State<NotesScreen> {
                   onLongPress: () => _deleteNote(note['id']),
                   child: Card(
                     color: color,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(note['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4)),
-                            child: Text(note['category'] ?? 'Разное', style: const TextStyle(fontSize: 10)),
+                    clipBehavior: Clip.antiAlias, // Чтобы картинка не вылезала за края
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Если есть фото — показываем его сверху
+                        if (note['photo_path'] != null && File(note['photo_path']).existsSync())
+                          Image.file(
+                            File(note['photo_path']),
+                            width: double.infinity,
+                            height: 80,
+                            fit: BoxFit.cover,
                           ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: Text(note['content'], style: const TextStyle(fontSize: 13), maxLines: 5, overflow: TextOverflow.ellipsis),
+                        Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(note['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4)),
+                                child: Text(note['category'] ?? 'Разное', style: const TextStyle(fontSize: 10)),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(note['content'], style: const TextStyle(fontSize: 13), maxLines: 3, overflow: TextOverflow.ellipsis),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 );
