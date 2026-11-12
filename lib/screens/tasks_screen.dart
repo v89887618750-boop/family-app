@@ -7,6 +7,7 @@ import '../widgets/item_tile.dart';
 import '../utils/family_manager.dart';
 import 'add_edit_screen.dart';
 import 'meter_stats_screen.dart';
+import 'calendar_screen.dart'; // <-- ИМПОРТ КАЛЕНДАРЯ
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
@@ -19,7 +20,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   List<String> _categories = [];
   late TabController _tabController;
   late ConfettiController _confettiController;
-  String _familyId = '';
+  String _familyId = ''; 
 
   @override
   void initState() { 
@@ -32,7 +33,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   Future<void> _initFamily() async {
     _familyId = await FamilyManager.getFamilyId();
     
-    // Автоматически создаем базовые категории, если их нет для этой семьи
+    // Проверяем, есть ли категории для этой семьи. Если нет — создаем.
     final db = await DatabaseHelper.instance.database;
     final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
     
@@ -64,7 +65,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _openAddEdit({Task? task}) async {
     if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ошибка загрузки категорий')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сначала добавьте категорию в настройках')));
       return;
     }
     final result = await Navigator.push(context, MaterialPageRoute(
@@ -219,6 +220,18 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       appBar: AppBar(
         title: const Text('Список дел'),
         actions: [
+          // Кнопка Календаря
+          IconButton(
+            icon: const Icon(Icons.calendar_month, color: Colors.teal),
+            tooltip: 'Календарь',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CalendarScreen()),
+              );
+            },
+          ),
+          // Кнопка очистки
           IconButton(
             icon: const Icon(Icons.cleaning_services),
             tooltip: 'Очистить выполненные',
