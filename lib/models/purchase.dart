@@ -5,7 +5,6 @@ class Purchase {
   final String periodicity;
   bool isCompleted;
   String? note;
-  String? familyId; // <-- ДОБАВЛЕНО: ID семьи
 
   Purchase({
     this.id, 
@@ -13,8 +12,7 @@ class Purchase {
     required this.category, 
     required this.periodicity, 
     this.isCompleted = false, 
-    this.note,
-    this.familyId,
+    this.note
   });
 
   Map<String, dynamic> toMap() => {
@@ -23,8 +21,7 @@ class Purchase {
     'category': category, 
     'periodicity': periodicity, 
     'isCompleted': isCompleted ? 1 : 0, 
-    'note': note,
-    'family_id': familyId, // <-- Передаем в базу
+    'note': note
   };
   
   factory Purchase.fromMap(Map<String, dynamic> map) => Purchase(
@@ -33,7 +30,6 @@ class Purchase {
     category: map['category'], 
     periodicity: map['periodicity'], 
     isCompleted: map['isCompleted'] == 1,
-    note: map['note'],
-    familyId: map['family_id'], // <-- Читаем из базы
+    note: map['note']
   );
 }
