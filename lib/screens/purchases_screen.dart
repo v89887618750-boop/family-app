@@ -4,7 +4,6 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../db/database_helper.dart';
 import '../models/purchase.dart';
-import '../utils/family_manager.dart';
 import 'add_edit_screen.dart';
 
 class PurchasesScreen extends StatefulWidget {
@@ -18,29 +17,12 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
   List<String> _categories = [];
   late TabController _tabController;
   late ConfettiController _confettiController;
-  String _familyId = '';
 
   @override
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 3, vsync: this); 
     _confettiController = ConfettiController(duration: const Duration(seconds: 2));
-    _initFamily();
-  }
-
-  Future<void> _initFamily() async {
-    _familyId = await FamilyManager.getFamilyId();
-    
-    // Проверяем, есть ли категории для этой семьи. Если нет — создаем.
-    final db = await DatabaseHelper.instance.database;
-    final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
-    
-    if (existingCats.isEmpty) {
-      for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
-        await db.insert('categories', {'family_id': _familyId, 'name': cat});
-      }
-    }
-    
     _loadData();
   }
 
@@ -53,8 +35,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _loadData() async {
     final db = await DatabaseHelper.instance.database;
-    final catMaps = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
-    final pMaps = await db.query('purchases', where: 'family_id = ?', whereArgs: [_familyId]);
+    final catMaps = await db.query('categories');
+    final pMaps = await db.query('purchases');
     setState(() {
       _categories = catMaps.map((e) => e['name'] as String).toList();
       _allPurchases = pMaps.map((e) => Purchase.fromMap(e)).toList();
@@ -63,7 +45,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _openAddEdit({Purchase? item}) async {
     if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ошибка загрузки категорий')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сначала добавьте категорию в настройках')));
       return;
     }
     final result = await Navigator.push(context, MaterialPageRoute(
@@ -74,7 +56,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
 
   Future<void> _clearCompleted() async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('purchases', where: 'isCompleted = 1 AND family_id = ?', whereArgs: [_familyId]);
+    await db.delete('purchases', where: 'isCompleted = 1');
     _loadData();
   }
 
@@ -169,10 +151,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
                 children: [
                   Text(item.category),
                   if (item.note != null && item.note!.isNotEmpty)
-                    Text(
-                      item.note!,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-                    ),
+                    Text(item.note!, style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
                 ],
               ),
             ),
