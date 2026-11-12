@@ -11,7 +11,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _currentMonth = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   
-  // Данные для календаря
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> _birthdays = [];
 
@@ -28,25 +27,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  // Получить количество дней в месяце
   int _getDaysInMonth(DateTime date) {
     return DateTime(date.year, date.month + 1, 0).day;
   }
 
-  // Получить первый день недели месяца (0 - Пн, 6 - Вс)
   int _getFirstWeekday(DateTime date) {
     return DateTime(date.year, date.month, 1).weekday - 1;
   }
 
-  // Проверка, есть ли события в этот день
+  // Проверка, есть ли события (дела или ДР) в этот день
   bool _hasEvents(int day) {
     String dateStr = '${_currentMonth.year}-${_currentMonth.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
     
     // Проверяем задачи
     bool hasTask = _tasks.any((t) => t['due_date'] == dateStr);
+    
     // Проверяем ДР (формат в базе ДД-ММ-ГГГГ)
     String bdayStr = '${day.toString().padLeft(2, '0')}-${_currentMonth.month.toString().padLeft(2, '0')}';
-    bool hasBday = _birthdays.any((b) => b['date'].toString().startsWith(bdayStr));
+    bool hasBday = _birthdays.any((b) {
+      final date = b['date'].toString();
+      return date.startsWith(bdayStr);
+    });
 
     return hasTask || hasBday;
   }
@@ -113,7 +114,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
               itemCount: daysInMonth + firstWeekday,
               itemBuilder: (context, index) {
-                if (index < firstWeekday) return const SizedBox.shrink(); // Пустые клетки в начале
+                if (index < firstWeekday) return const SizedBox.shrink();
                 
                 final day = index - firstWeekday + 1;
                 final isToday = DateTime.now().day == day && DateTime.now().month == _currentMonth.month && DateTime.now().year == _currentMonth.year;
@@ -169,11 +170,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ? const Center(child: Text('На этот день событий нет'))
                 : ListView(
                     children: [
+                      // Дни рождения
                       ...selectedBdays.map((b) => ListTile(
                         leading: const Icon(Icons.cake, color: Colors.pink),
                         title: Text('День рождения: ${b['name']}'),
                         subtitle: const Text('🎂 Не забудьте поздравить!'),
                       )),
+                      // Задачи
                       ...selectedTasks.map((t) => ListTile(
                         leading: const Icon(Icons.task, color: Colors.teal),
                         title: Text(t['title']),
