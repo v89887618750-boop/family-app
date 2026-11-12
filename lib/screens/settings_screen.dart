@@ -50,6 +50,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _categories = maps);
   }
 
+  void _showEditFamilyIdDialog() {
+    final controller = TextEditingController(text: _familyId);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Изменить ID семьи'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Придумайте удобный код (например, VOLKOV или HOME-2026). Все, кто введет этот код, попадут в вашу семью.', style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Новый ID', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () async {
+              String newId = controller.text.trim().toUpperCase(); // Приводим к верхнему регистру для удобства
+              if (newId.isEmpty) return;
+              
+              await FamilyManager.setFamilyId(newId);
+              
+              // Перезагружаем категории для нового ID (если их нет, создадутся на экране дел)
+              final db = await DatabaseHelper.instance.database;
+              final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [newId]);
+              if (existingCats.isEmpty) {
+                for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
+                  await db.insert('categories', {'family_id': newId, 'name': cat});
+                }
+              }
+              
+              if (mounted) {
+                Navigator.pop(context);
+                _loadFamilyId();
+                _loadCategories();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ID семьи успешно изменен!')));
+              }
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showCategoryDialog({Map<String, dynamic>? category}) {
     final controller = TextEditingController(text: category != null ? category['name'] : '');
     showDialog(
@@ -100,14 +149,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _joinFamily() async {
     if (_joinController.text.trim().isEmpty) return;
     
-    // Меняем ID семьи
-    await FamilyManager.setFamilyId(_joinController.text.trim());
+    String newId = _joinController.text.trim().toUpperCase();
+    await FamilyManager.setFamilyId(newId);
+    
+    // Проверяем категории
+    final db = await DatabaseHelper.instance.database;
+    final existingCats = await db.query('categories', where: 'family_id = ?', whereArgs: [newId]);
+    if (existingCats.isEmpty) {
+      for (var cat in ['Общее', 'Дом', 'Семья', 'Личное', 'Работа', 'Праздник']) {
+        await db.insert('categories', {'family_id': newId, 'name': cat});
+      }
+    }
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы вошли в новую семью! Перезапустите приложение.')),
+        const SnackBar(content: Text('Вы вошли в семью! Перезапустите приложение.')),
       );
-      // Обновляем ID на экране
       _loadFamilyId();
       _loadCategories();
       _joinController.clear();
@@ -153,13 +210,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.vpn_key, color: Colors.teal),
             title: const Text('Ваш ID семьи'),
-            subtitle: Text(_familyId, style: const TextStyle(fontWeight: FontWeight.bold)),
-            trailing: IconButton(
-              icon: const Icon(Icons.copy, color: Colors.blue),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _familyId));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ID скопирован в буфер обмена')));
-              },
+            subtitle: Text(_familyId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.teal)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.copy, color: Colors.blue),
+                  tooltip: 'Скопировать',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _familyId));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ID скопирован')));
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.orange),
+                  tooltip: 'Изменить ID',
+                  onPressed: _showEditFamilyIdDialog, // <-- Кнопка изменения ID
+                ),
+              ],
             ),
           ),
           Padding(
@@ -170,7 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: TextField(
                     controller: _joinController,
                     decoration: const InputDecoration(
-                      labelText: 'Ввести ID жены/мужа',
+                      labelText: 'Ввести ID родственника',
                       border: OutlineInputBorder(),
                     ),
                   ),
