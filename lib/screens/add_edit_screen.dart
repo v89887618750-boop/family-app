@@ -3,7 +3,8 @@ import 'package:intl/intl.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../models/purchase.dart';
-import '../utils/family_manager.dart'; // Импортируем менеджер семьи
+import '../utils/family_manager.dart';
+import '../utils/notification_service.dart'; // <-- ИМПОРТ УВЕДОМЛЕНИЙ
 
 class AddEditScreen extends StatefulWidget {
   final String type;
@@ -69,7 +70,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   Future<void> _save() async {
     if (_titleController.text.trim().isEmpty) return;
     final db = await DatabaseHelper.instance.database;
-    final familyId = await FamilyManager.getFamilyId(); // Получаем ID семьи
+    final familyId = await FamilyManager.getFamilyId();
     
     String? dateToSave;
     if (_periodicity == 'Ежедневно') {
@@ -96,17 +97,18 @@ class _AddEditScreenState extends State<AddEditScreen> {
       'due_time': timeToSave, 
       'reading_value': _isMeter ? _readingController.text : null,
       'note': widget.type == 'purchase' ? _noteController.text.trim() : null,
-      'family_id': familyId, // <-- ДОБАВЛЕНО: привязка к семье
+      'family_id': familyId,
     };
 
+    int? taskId;
     if (widget.item == null) {
       if (widget.type == 'task') {
-        final taskId = await db.insert('tasks', Task(
+        taskId = await db.insert('tasks', Task(
           title: data['title'] as String, category: data['category'] as String, 
           periodicity: data['periodicity'] as String, dueDate: data['due_date'] as String?,
           dueTime: data['due_time'] as String?,
           readingValue: data['reading_value'] as String?,
-          familyId: familyId, // Передаем ID
+          familyId: familyId,
         ).toMap());
         
         if (_isMeter && _readingController.text.isNotEmpty) {
@@ -122,12 +124,46 @@ class _AddEditScreenState extends State<AddEditScreen> {
           category: data['category'] as String, 
           periodicity: data['periodicity'] as String,
           note: data['note'] as String?,
-          familyId: familyId, // Передаем ID
+          familyId: familyId,
         ).toMap());
       }
     } else {
+      taskId = widget.item.id;
       await db.update(widget.type == 'task' ? 'tasks' : 'purchases', data, where: 'id = ?', whereArgs: [widget.item.id]);
     }
+
+    // --- ЛОГИКА УВЕДОМЛЕНИЙ ---
+    if (widget.type == 'task' && taskId != null && timeToSave != null && dateToSave != null) {
+      try {
+        // Отменяем старое уведомление, если оно было
+        await NotificationService.cancelNotification(taskId);
+        
+        // Парсим дату и время для будильника
+        final partsDate = dateToSave.split('-');
+        final partsTime = timeToSave.split(':');
+        final scheduledDateTime = DateTime(
+          int.parse(partsDate[0]), 
+          int.parse(partsDate[1]), 
+          int.parse(partsDate[2]), 
+          int.parse(partsTime[0]), 
+          int.parse(partsTime[1])
+        );
+
+        // Если время еще не прошло, ставим уведомление
+        if (scheduledDateTime.isAfter(DateTime.now())) {
+          await NotificationService.scheduleNotification(
+            id: taskId,
+            title: 'Напоминание: ${_titleController.text.trim()}',
+            body: 'Пора выполнить задачу!',
+            scheduledDate: scheduledDateTime,
+          );
+        }
+      } catch (e) {
+        debugPrint('Ошибка установки уведомления: $e');
+      }
+    }
+    // --------------------------
+
     if (mounted) Navigator.pop(context, true);
   }
 
