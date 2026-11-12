@@ -13,7 +13,8 @@ class _NotesScreenState extends State<NotesScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  final List<String> _categories = ['Рецепт', 'Пароль', 'Бытовое', 'Разное'];
+  // Категории для семейных записей
+  final List<String> _categories = ['Рецепт', 'Идея', 'Список', 'Памятка'];
 
   @override
   void initState() { super.initState(); _loadNotes(); }
