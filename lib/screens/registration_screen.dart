@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
+import '../utils/family_manager.dart'; // Импортируем менеджер
 
 class RegistrationScreen extends StatefulWidget {
   final VoidCallback onRegistrationComplete;
@@ -42,6 +43,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (_patronymicController.text.trim().isNotEmpty) {
       fullName += ' ${_patronymicController.text.trim()}';
     }
+    if (_maidenNameController.text.trim().isNotEmpty) {
+      fullName += ' (${_maidenNameController.text.trim()})';
+    }
 
     String formattedDate = '${_selectedDay.toString().padLeft(2, '0')}-${_selectedMonth.toString().padLeft(2, '0')}-$_selectedYear';
 
@@ -50,10 +54,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     await prefs.setString('my_date', formattedDate);
     if (_photoPath != null) await prefs.setString('my_photo', _photoPath!);
 
+    // Получаем ID семьи (создается автоматически при первом запуске)
+    final familyId = await FamilyManager.getFamilyId();
+    
     final db = await DatabaseHelper.instance.database;
     
-    // 1. Сначала создаем запись в Днях рождения для себя
+    // 1. Создаем запись в Днях рождения
     int bdayId = await db.insert('birthdays', {
+      'family_id': familyId,
       'name': fullName,
       'date': formattedDate,
       'category': 'Я',
@@ -61,15 +69,41 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       'photo_path': _photoPath,
     });
 
-    // 2. Затем создаем запись в Семье и привязываем к ДР
+    // 2. Создаем запись в Семье
     await db.insert('family_members', {
+      'family_id': familyId,
       'name': fullName,
       'relation': 'Я',
       'photo_path': _photoPath,
-      'birthday_id': bdayId, // <-- ПРИВЯЗКА!
+      'birthday_id': bdayId,
     });
 
     widget.onRegistrationComplete();
+  }
+
+  void _showJoinFamilyDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Войти в семью'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Код семьи (например: FAMILY-12345678)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () async {
+              if (controller.text.trim().isEmpty) return;
+              await FamilyManager.setFamilyId(controller.text.trim());
+              widget.onRegistrationComplete(); // Перезапускаем приложение под новым ID
+            },
+            child: const Text('Войти'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -83,8 +117,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               const Icon(Icons.family_restroom, size: 80, color: Colors.teal),
               const SizedBox(height: 16),
               const Text('Добро пожаловать!', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Создайте свой профиль или войдите в существующую семью', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
               
+              // Выбор аватарки
               GestureDetector(
                 onTap: () async {
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -108,6 +145,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
               const SizedBox(height: 16),
               TextField(controller: _patronymicController, decoration: const InputDecoration(labelText: 'Отчество', border: OutlineInputBorder())),
+              const SizedBox(height: 8),
+              TextField(controller: _maidenNameController, decoration: const InputDecoration(labelText: 'Девичья фамилия (если есть)', border: OutlineInputBorder())),
               
               const SizedBox(height: 24),
               const Text('Дата рождения', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -151,6 +190,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               SizedBox(
                 width: double.infinity, height: 50,
                 child: ElevatedButton(onPressed: _saveProfile, child: const Text('Создать профиль', style: TextStyle(fontSize: 18))),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: _showJoinFamilyDialog,
+                child: const Text('У меня уже есть код семьи (Войти)'),
               ),
             ],
           ),
