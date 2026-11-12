@@ -4,6 +4,7 @@ import 'package:confetti/confetti.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
 import '../widgets/item_tile.dart';
+import '../utils/family_manager.dart'; // Импортируем менеджер семьи
 import 'add_edit_screen.dart';
 import 'meter_stats_screen.dart';
 
@@ -18,13 +19,19 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   List<String> _categories = [];
   late TabController _tabController;
   late ConfettiController _confettiController;
+  String _familyId = ''; // ID текущей семьи
 
   @override
   void initState() { 
     super.initState(); 
     _tabController = TabController(length: 4, vsync: this); 
     _confettiController = ConfettiController(duration: const Duration(seconds: 2)); 
-    _loadData(); 
+    _initFamily();
+  }
+
+  Future<void> _initFamily() async {
+    _familyId = await FamilyManager.getFamilyId();
+    _loadData();
   }
 
   @override
@@ -36,8 +43,9 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _loadData() async {
     final db = await DatabaseHelper.instance.database;
-    final catMaps = await db.query('categories');
-    final taskMaps = await db.query('tasks');
+    // Загружаем категории и задачи ТОЛЬКО для текущей семьи
+    final catMaps = await db.query('categories', where: 'family_id = ?', whereArgs: [_familyId]);
+    final taskMaps = await db.query('tasks', where: 'family_id = ?', whereArgs: [_familyId]);
     setState(() {
       _categories = catMaps.map((e) => e['name'] as String).toList();
       _allTasks = taskMaps.map((e) => Task.fromMap(e)).toList();
@@ -57,7 +65,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _clearCompleted() async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('tasks', where: 'isCompleted = 1');
+    await db.delete('tasks', where: 'isCompleted = 1 AND family_id = ?', whereArgs: [_familyId]);
     _loadData();
   }
 
@@ -150,32 +158,27 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             final db = await DatabaseHelper.instance.database;
             task.isCompleted = !task.isCompleted;
             
-            // --- ЛОГИКА ПРОЛОНГАЦИИ ---
             if (task.isCompleted) {
               DateTime now = DateTime.now();
               
               if (task.periodicity == 'Ежедневно') {
-                // Если ежедневное, переносим дату на завтра (или ставим сегодня)
                 DateTime nextDue = now.add(const Duration(days: 1));
                 task.dueDate = nextDue.toIso8601String().split('T')[0];
                 task.isCompleted = false; 
               } 
               else if (task.periodicity == 'Ежемесячно' && task.dueDate != null) {
-                // Если ежемесячное, переносим на следующий месяц
                 DateTime due = DateTime.parse(task.dueDate!);
                 DateTime nextDue = DateTime(due.year, due.month + 1, due.day);
                 task.dueDate = nextDue.toIso8601String().split('T')[0];
                 task.isCompleted = false; 
               }
               else if (task.periodicity == 'Ежегодно' && task.dueDate != null) {
-                // Если ежегодное, переносим на следующий год
                 DateTime due = DateTime.parse(task.dueDate!);
                 DateTime nextDue = DateTime(due.year + 1, due.month, due.day);
                 task.dueDate = nextDue.toIso8601String().split('T')[0];
                 task.isCompleted = false; 
               }
             }
-            // -------------------------
 
             await db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
             
