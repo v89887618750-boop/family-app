@@ -3,7 +3,6 @@ import 'tasks_screen.dart';
 import 'purchases_screen.dart';
 import 'family_screen.dart';
 import 'notes_screen.dart';
-import 'calendar_screen.dart'; // <-- НОВЫЙ ИМПОРТ
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,7 +22,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final screens = [
       const TasksScreen(),
-      const CalendarScreen(), // <-- КАЛЕНДАРЬ
       const PurchasesScreen(),
       const FamilyScreen(),
       const NotesScreen(),
@@ -42,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.task), label: 'Дела'),
-          NavigationDestination(icon: Icon(Icons.calendar_month), label: 'Календарь'),
           NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'Покупки'),
           NavigationDestination(icon: Icon(Icons.family_restroom), label: 'Семья'),
           NavigationDestination(icon: Icon(Icons.note), label: 'Заметки'),
