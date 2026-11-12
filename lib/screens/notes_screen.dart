@@ -71,9 +71,9 @@ class _NotesScreenState extends State<NotesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Фото
+                // Фото (исправлено)
                 if (photoPath != null)
-                  Image.file(File(photoPath), height: 100),
+                  Image.file(File(photoPath!), height: 100),
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -206,11 +206,10 @@ class _NotesScreenState extends State<NotesScreen> {
                   onLongPress: () => _deleteNote(note['id']),
                   child: Card(
                     color: color,
-                    clipBehavior: Clip.antiAlias, // Чтобы картинка не вылезала за края
+                    clipBehavior: Clip.antiAlias,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Если есть фото — показываем его сверху
                         if (note['photo_path'] != null && File(note['photo_path']).existsSync())
                           Image.file(
                             File(note['photo_path']),
