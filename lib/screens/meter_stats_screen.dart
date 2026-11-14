@@ -36,6 +36,36 @@ class _MeterStatsScreenState extends State<MeterStatsScreen> {
     });
   }
 
+  /// Безопасно разбирает дату показания: в базе может быть и ISO-строка,
+  /// и простая дата без времени.
+  DateTime? _parseStoredDate(dynamic raw) {
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
+
+  String _formatDate(dynamic raw) {
+    final date = _parseStoredDate(raw);
+    if (date == null) return raw?.toString() ?? '';
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day.$month.${date.year}';
+  }
+
+  String _formatTime(dynamic raw) {
+    final value = raw?.toString() ?? '';
+    if (!value.contains('T')) return '';
+    final date = _parseStoredDate(raw);
+    if (date == null) return '';
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  double _toDouble(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw?.toString().replaceAll(',', '.') ?? '') ?? 0.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,12 +96,11 @@ class _MeterStatsScreenState extends State<MeterStatsScreen> {
                                 sideTitles: SideTitles(
                                   showTitles: true,
                                   getTitlesWidget: (value, meta) {
-                                    if (value.toInt() >= 0 && value.toInt() < _history.length) {
-                                      final dateStr = _history[value.toInt()]['date'].toString().split('T')[0];
-                                      final parts = dateStr.split('-');
-                                      if (parts.length == 3) {
-                                        return Text('${parts[2]}.${parts[1]}', style: const TextStyle(fontSize: 10));
-                                      }
+                                    final index = value.toInt();
+                                    if (value == index && index >= 0 && index < _history.length) {
+                                      final formatted = _formatDate(_history[index]['date']);
+                                      final label = formatted.length > 5 ? formatted.substring(0, 5) : formatted;
+                                      return Text(label, style: const TextStyle(fontSize: 10));
                                     }
                                     return const Text('');
                                   },
@@ -85,8 +114,7 @@ class _MeterStatsScreenState extends State<MeterStatsScreen> {
                             lineBarsData: [
                               LineChartBarData(
                                 spots: _history.asMap().entries.map((e) {
-                                  final val = (e.value['reading_value'] as num).toDouble();
-                                  return FlSpot(e.key.toDouble(), val);
+                                  return FlSpot(e.key.toDouble(), _toDouble(e.value['reading_value']));
                                 }).toList(),
                                 isCurved: true,
                                 color: Colors.teal,
@@ -113,16 +141,18 @@ class _MeterStatsScreenState extends State<MeterStatsScreen> {
                           itemBuilder: (context, index) {
                             // Показываем новые сверху
                             final item = _history[_history.length - 1 - index];
-                            final dateStr = item['date'].toString().split('T')[0];
-                            final timeStr = item['date'].toString().split('T')[1].substring(0, 5);
+                            final dateStr = _formatDate(item['date']);
+                            final timeStr = _formatTime(item['date']);
+                            final reading = item['reading_value'];
                             return Card(
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               child: ListTile(
                                 leading: const Icon(Icons.speed, color: Colors.blue),
-                                title: Text('Показания: ${item['reading_value']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text('Дата: $dateStr в $timeStr'),
+                                title: Text('Показания: $reading', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                subtitle: Text(timeStr.isEmpty ? 'Дата: $dateStr' : 'Дата: $dateStr в $timeStr'),
                               ),
                             );
+
                           },
                         ),
                       ),

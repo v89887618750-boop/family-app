@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'screens/home_screen.dart';
 import 'screens/registration_screen.dart';
 import 'utils/notification_service.dart';
@@ -9,10 +11,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.init();
 
-  // Запрос разрешения на уведомления для Android 13+
-  final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+  // Запрос разрешения на уведомления для Android 13+.
+  final notificationsPlugin = FlutterLocalNotificationsPlugin();
+  await notificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
 
   runApp(const FamilyListsApp());
@@ -39,30 +42,33 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _isDarkMode = prefs.getBool('isDarkMode') ?? false;
       _fontSize = prefs.getDouble('fontSize') ?? 1.0;
-      _isRegistered = prefs.getString('my_name') != null;
+      _isRegistered = (prefs.getString('my_name') ?? '').isNotEmpty;
       _isLoading = false;
     });
   }
 
-  void toggleTheme(bool value) async {
+  Future<void> toggleTheme(bool value) async {
+    setState(() => _isDarkMode = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', value);
-    setState(() => _isDarkMode = value);
   }
 
-  void changeFontSize(double value) async {
+  Future<void> changeFontSize(double value) async {
+    setState(() => _fontSize = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('fontSize', value);
-    setState(() => _fontSize = value);
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+      return const MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
     }
 
     return MaterialApp(
@@ -74,19 +80,39 @@ class _FamilyListsAppState extends State<FamilyListsApp> {
         brightness: Brightness.light,
       ),
       darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          brightness: Brightness.dark,
+        ),
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      // Русская локализация нужна, чтобы календарь и выбор даты/времени
+      // были на русском (иначе showDatePicker с locale: ru падает).
+      locale: const Locale('ru'),
+      supportedLocales: const [
+        Locale('ru'),
+        Locale('en'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(_fontSize)),
-          child: child!,
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(_fontSize),
+          ),
+          child: child ?? const SizedBox.shrink(),
         );
       },
-      home: _isRegistered 
-          ? HomeScreen(onThemeChanged: toggleTheme, onFontSizeChanged: changeFontSize)
+      home: _isRegistered
+          ? HomeScreen(
+              onThemeChanged: toggleTheme,
+              onFontSizeChanged: changeFontSize,
+            )
           : RegistrationScreen(
               onRegistrationComplete: () {
                 setState(() => _isRegistered = true);
