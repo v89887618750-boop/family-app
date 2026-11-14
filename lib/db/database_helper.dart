@@ -35,7 +35,6 @@ class DatabaseHelper {
       category TEXT NOT NULL, remind_days INTEGER DEFAULT 1, photo_path TEXT
     )''');
 
-    // <-- ВАЖНО: здесь должно быть reserved_by
     await db.execute('''CREATE TABLE gifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, forWhom TEXT NOT NULL, 
       category TEXT NOT NULL, isBought INTEGER NOT NULL, note TEXT, photo_path TEXT, reserved_by TEXT
@@ -53,6 +52,7 @@ class DatabaseHelper {
       birthday_id INTEGER, photo_path TEXT, FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
     )''');
 
+    // ВАЖНО: здесь есть category и photo_path
     await db.execute('''CREATE TABLE notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL, 
       date TEXT NOT NULL, color INTEGER DEFAULT 0, category TEXT, photo_path TEXT
