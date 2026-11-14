@@ -3,16 +3,37 @@ import 'package:sqflite/sqflite.dart';
 
 /// Единая точка доступа к локальной базе данных приложения.
 ///
-/// Версия схемы: 15.
-/// Все таблицы создаются «сразу в финальном виде» (CREATE TABLE IF NOT EXISTS),
-/// а onUpgrade дополнительно правит колонки, поэтому база сходится к
-/// правильной схеме из любого старого состояния.
+/// Версия схемы: 16 (добавлена подготовка к синхронизации).
+///
+/// Схема приводится к финальному виду из любого старого состояния:
+/// таблицы создаются через `CREATE TABLE IF NOT EXISTS`, недостающие колонки
+/// досоздаются через `ALTER TABLE` после проверки `PRAGMA table_info`.
+///
+/// Синхронизация:
+///   * в каждой синхронизируемой таблице есть `sync_id` (UUID строки)
+///     и `updated_at` (мс epoch) — их автоматически заполняют SQLite-триггеры;
+///   * удаления фиксируются в `sync_tombstones`, чтобы «удалённое» не
+///     воскресало с другого устройства;
+///   * прогресс обмена хранится в `sync_meta`.
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
-  static const int _dbVersion = 15;
+  static const int _dbVersion = 16;
   static const String _dbName = 'family_lists.db';
+
+  /// Таблицы, которые участвуют в синхронизации.
+  static const List<String> syncTables = <String>[
+    'birthdays',
+    'tasks',
+    'purchases',
+    'gifts',
+    'categories',
+    'notes',
+    'family_members',
+    'relations',
+    'meter_readings',
+  ];
 
   DatabaseHelper._init();
 
@@ -52,7 +73,9 @@ class DatabaseHelper {
         isCompleted INTEGER NOT NULL DEFAULT 0,
         due_date TEXT,
         due_time TEXT,
-        reading_value TEXT
+        reading_value TEXT,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0
       )
     ''');
 
@@ -63,7 +86,9 @@ class DatabaseHelper {
         category TEXT NOT NULL,
         periodicity TEXT NOT NULL,
         isCompleted INTEGER NOT NULL DEFAULT 0,
-        note TEXT
+        note TEXT,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0
       )
     ''');
 
@@ -74,7 +99,9 @@ class DatabaseHelper {
         date TEXT NOT NULL,
         category TEXT NOT NULL,
         remind_days INTEGER DEFAULT 1,
-        photo_path TEXT
+        photo_path TEXT,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0
       )
     ''');
 
@@ -87,14 +114,18 @@ class DatabaseHelper {
         isBought INTEGER NOT NULL DEFAULT 0,
         note TEXT,
         photo_path TEXT,
-        reserved_by TEXT
+        reserved_by TEXT,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0
       )
     ''');
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE
+        name TEXT NOT NULL UNIQUE,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0
       )
     ''');
 
@@ -104,6 +135,8 @@ class DatabaseHelper {
         task_id INTEGER NOT NULL,
         reading_value REAL NOT NULL,
         date TEXT NOT NULL,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
       )
     ''');
@@ -115,6 +148,8 @@ class DatabaseHelper {
         relation TEXT NOT NULL,
         birthday_id INTEGER,
         photo_path TEXT,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (birthday_id) REFERENCES birthdays (id) ON DELETE SET NULL
       )
     ''');
@@ -128,12 +163,13 @@ class DatabaseHelper {
         a_id INTEGER NOT NULL,
         b_id INTEGER NOT NULL,
         type TEXT NOT NULL,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0,
         FOREIGN KEY (a_id) REFERENCES family_members (id) ON DELETE CASCADE,
         FOREIGN KEY (b_id) REFERENCES family_members (id) ON DELETE CASCADE
       )
     ''');
 
-    // Заметки: и category, и photo_path обязательны начиная с версии 14.
     await db.execute('''
       CREATE TABLE IF NOT EXISTS notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,7 +178,26 @@ class DatabaseHelper {
         date TEXT NOT NULL,
         color INTEGER DEFAULT 0,
         category TEXT,
-        photo_path TEXT
+        photo_path TEXT,
+        sync_id TEXT,
+        updated_at INTEGER DEFAULT 0
+      )
+    ''');
+
+    // Удалённые записи: чтобы удаление на одном устройстве доехало до других.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_tombstones (
+        sync_id TEXT PRIMARY KEY,
+        table_name TEXT NOT NULL,
+        deleted_at INTEGER NOT NULL
+      )
+    ''');
+
+    // Служебные значения синхронизации (водяные знаки push/pull и т.п.).
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT
       )
     ''');
 
@@ -184,12 +239,89 @@ class DatabaseHelper {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Подготовка синхронизации
+  // ---------------------------------------------------------------------------
+
+  /// Заполняет sync_id / updated_at у существующих строк и создаёт индексы.
+  Future<void> _backfillSync(Database db) async {
+    for (final table in syncTables) {
+      await db.execute(
+        "UPDATE $table SET sync_id = lower(hex(randomblob(16))) "
+        "WHERE sync_id IS NULL OR sync_id = ''",
+      );
+      await db.execute(
+        'UPDATE $table SET updated_at = 1 WHERE updated_at IS NULL OR updated_at = 0',
+      );
+      await db.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS ux_${table}_sync ON $table (sync_id)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS ix_${table}_updated ON $table (updated_at)',
+      );
+    }
+  }
+
+  /// Триггеры:
+  ///   * INSERT — выдают sync_id и время, если их не передали явно;
+  ///   * UPDATE — поднимает updated_at, если запись правили из приложения
+  ///     (при синхронизации updated_at передаётся явно и сохраняется как есть).
+  ///
+  /// Рекурсивные триггеры в SQLite по умолчанию выключены, поэтому UPDATE
+  /// внутри триггера не вызывает этот же триггер повторно.
+  Future<void> _createSyncTriggers(Database db) async {
+    for (final table in syncTables) {
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_${table}_insert
+        AFTER INSERT ON $table
+        BEGIN
+          UPDATE $table
+          SET sync_id = COALESCE(NEW.sync_id, lower(hex(randomblob(16)))),
+              updated_at = CASE
+                WHEN NEW.updated_at IS NULL OR NEW.updated_at = 0
+                THEN CAST(strftime('%s', 'now') AS INTEGER) * 1000
+                ELSE NEW.updated_at
+              END
+          WHERE id = NEW.id;
+        END
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_${table}_update
+        AFTER UPDATE ON $table
+        BEGIN
+          UPDATE $table
+          SET updated_at = CASE
+                WHEN NEW.updated_at IS OLD.updated_at
+                THEN CAST(strftime('%s', 'now') AS INTEGER) * 1000
+                ELSE NEW.updated_at
+              END
+          WHERE id = NEW.id AND NEW.sync_id IS NOT NULL;
+        END
+      ''');
+    }
+  }
+
+  Future<void> _ensureSyncColumns(Database db) async {
+    for (final table in syncTables) {
+      await _ensureColumn(db, table, 'sync_id', 'TEXT');
+      await _ensureColumn(db, table, 'updated_at', 'INTEGER DEFAULT 0');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Создание и миграции
+  // ---------------------------------------------------------------------------
+
   Future<void> _createDB(Database db, int version) async {
     await _createTables(db);
+    await _ensureSyncColumns(db);
+    await _backfillSync(db);
+    await _createSyncTriggers(db);
     await _seedCategories(db);
   }
 
-  /// Миграции «по колонкам»: безопасно доводят любую старую базу до версии 14.
+  /// Миграции «по колонкам»: безопасно доводят любую старую базу до версии 16.
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     // 1. Создаём таблицы, которых может не быть в очень старых сборках.
     await _createTables(db);
@@ -225,7 +357,12 @@ class DatabaseHelper {
       await _ensureColumn(db, 'notes', 'photo_path', 'TEXT');
     }
 
-    // 3. Базовые категории.
+    // 3. Подготовка синхронизации (v16).
+    await _ensureSyncColumns(db);
+    await _backfillSync(db);
+    await _createSyncTriggers(db);
+
+    // 4. Базовые категории.
     await _seedCategories(db);
   }
 

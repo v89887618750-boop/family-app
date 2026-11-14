@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../db/database_helper.dart';
 import '../models/gift.dart';
+import '../sync/sync_db.dart';
 
 /// Семейный Wishlist (список желаний).
 ///
@@ -262,7 +263,7 @@ class _GiftsScreenState extends State<GiftsScreen> {
     if (confirm != true) return;
 
     final db = await DatabaseHelper.instance.database;
-    await db.delete('gifts', where: 'id = ?', whereArgs: [gift.id]);
+    await SyncDb.deleteRow(db, 'gifts', gift.id);
     await _loadGifts();
   }
 

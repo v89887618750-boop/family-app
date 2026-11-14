@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../db/database_helper.dart';
+import '../sync/sync_db.dart';
 
 /// Семейный блокнот: цветные заметки с поиском, категорией и фото.
 class NotesScreen extends StatefulWidget {
@@ -277,7 +278,7 @@ class _NotesScreenState extends State<NotesScreen> {
     if (confirm != true) return;
 
     final db = await DatabaseHelper.instance.database;
-    await db.delete('notes', where: 'id = ?', whereArgs: [note['id']]);
+    await SyncDb.deleteRow(db, 'notes', note['id']);
     await _loadNotes();
   }
 
