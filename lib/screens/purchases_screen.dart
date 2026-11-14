@@ -6,6 +6,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../db/database_helper.dart';
 import '../models/purchase.dart';
+import '../sync/sync_db.dart';
 import 'add_edit_screen.dart';
 
 class PurchasesScreen extends StatefulWidget {
@@ -128,7 +129,12 @@ class _PurchasesScreenState extends State<PurchasesScreen>
     if (confirm != true) return;
 
     final db = await DatabaseHelper.instance.database;
-    await db.delete('purchases', where: 'isCompleted = 1');
+    await SyncDb.deleteWhere(
+      db,
+      'purchases',
+      where: 'isCompleted = 1',
+      whereArgs: const <Object?>[],
+    );
     await _loadData();
   }
 
@@ -154,7 +160,7 @@ class _PurchasesScreenState extends State<PurchasesScreen>
     if (confirm != true) return;
 
     final db = await DatabaseHelper.instance.database;
-    await db.delete('purchases', where: 'id = ?', whereArgs: [item.id]);
+    await SyncDb.deleteRow(db, 'purchases', item.id);
     await _loadData();
   }
 

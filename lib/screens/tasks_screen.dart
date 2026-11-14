@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import '../db/database_helper.dart';
 import '../models/task.dart';
+import '../sync/sync_db.dart';
 import '../widgets/item_tile.dart';
 import 'add_edit_screen.dart';
 import 'meter_stats_screen.dart';
@@ -58,7 +59,12 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
   Future<void> _clearCompleted() async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('tasks', where: 'isCompleted = 1');
+    await SyncDb.deleteWhere(
+      db,
+      'tasks',
+      where: 'isCompleted = 1',
+      whereArgs: const <Object?>[],
+    );
     _loadData();
   }
 
@@ -188,7 +194,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           onEdit: () => _openAddEdit(task: task), // <-- ИСПРАВЛЕНО: привязка редактирования
           onDelete: () async {
             final db = await DatabaseHelper.instance.database;
-            await db.delete('tasks', where: 'id = ?', whereArgs: [task.id]);
+            await SyncDb.deleteRow(db, 'tasks', task.id);
             _loadData();
           },
         );

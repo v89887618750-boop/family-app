@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../db/database_helper.dart';
+import '../sync/sync_db.dart';
 import '../utils/person_utils.dart';
 import 'family_tree_screen.dart';
 import 'gifts_screen.dart';
@@ -879,7 +880,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }) async {
     final db = await DatabaseHelper.instance.database;
 
-    await db.delete(
+    await SyncDb.deleteWhere(
+      db,
       'relations',
       where: "(b_id = ? AND (type = 'father' OR type = 'mother')) OR "
           "(type = 'spouse' AND (a_id = ? OR b_id = ?))",
@@ -1024,7 +1026,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final db = await DatabaseHelper.instance.database;
     final birthdayId = member['birthday_id'] as int?;
 
-    await db.delete('family_members', where: 'id = ?', whereArgs: [member['id']]);
+    await SyncDb.deleteRow(db, 'family_members', member['id']);
 
     // Если на эту дату рождения больше никто не ссылается — убираем и её,
     // чтобы в «Днях рождения» не оставался дубль.
@@ -1035,7 +1037,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           )) ??
           0;
       if (count == 0) {
-        await db.delete('birthdays', where: 'id = ?', whereArgs: [birthdayId]);
+        await SyncDb.deleteRow(db, 'birthdays', birthdayId);
       }
     }
 

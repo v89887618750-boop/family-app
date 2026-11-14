@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../db/database_helper.dart';
+import '../sync/sync_db.dart';
+import 'sync_screen.dart';
 
 /// Настройки приложения: тема, размер шрифта, категории.
 /// Идентификатор семьи здесь больше не нужен и не показывается.
@@ -196,7 +198,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirm != true) return;
 
     final db = await DatabaseHelper.instance.database;
-    await db.delete('categories', where: 'id = ?', whereArgs: [category['id']]);
+    await SyncDb.deleteRow(db, 'categories', category['id']);
     await _loadCategories();
   }
 
@@ -287,6 +289,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.add, color: Colors.green),
             title: const Text('Добавить категорию'),
             onTap: () => _showCategoryDialog(),
+          ),
+          const Divider(),
+          const ListTile(
+            title: Text(
+              'Синхронизация',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_sync, color: Colors.teal),
+            title: const Text('Общая семья на всех устройствах'),
+            subtitle: const Text('Вход в аккаунт семьи и обмен данными'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SyncScreen()),
+              );
+            },
           ),
           const Divider(),
           if (_profileName.isNotEmpty) ...[

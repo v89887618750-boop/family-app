@@ -44,14 +44,84 @@ jobs:
         run: |
           echo "android.aapt2Version=8.6.1-11315950" >> android/gradle.properties
 
+      # flutter_local_notifications 17.x требует core library desugaring.
+      # Без этого шага сборка падает с ошибкой:
+      # "Dependency ':flutter_local_notifications' requires core library desugaring".
+      - name: Enable core library desugaring
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          path = pathlib.Path('android/app/build.gradle')
+          if path.exists():
+              text = path.read_text()
+          else:
+              path = pathlib.Path('android/app/build.gradle.kts')
+              text = path.read_text()
+
+          changed = False
+
+          if 'coreLibraryDesugaringEnabled' not in text and 'isCoreLibraryDesugaringEnabled' not in text:
+              if 'compileOptions {' in text:
+                  text = text.replace(
+                      'compileOptions {',
+                      'compileOptions {\n        coreLibraryDesugaringEnabled true',
+                      1,
+                  )
+              elif 'compileOptions = CompileOptions()' in text or path.suffix == '.kts':
+                  text = text.replace(
+                      'android {',
+                      'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n        sourceCompatibility = JavaVersion.VERSION_1_8\n        targetCompatibility = JavaVersion.VERSION_1_8\n    }',
+                      1,
+                  )
+              else:
+                  text = text.replace(
+                      'android {',
+                      'android {\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }',
+                      1,
+                  )
+              changed = True
+
+          if 'desugar_jdk_libs' not in text:
+              dep = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'"
+              if path.suffix == '.kts':
+                  dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")'
+              if 'dependencies {' in text:
+                  index = text.rindex('dependencies {')
+                  insert_at = index + len('dependencies {')
+                  text = text[:insert_at] + '\n    ' + dep + text[insert_at:]
+              else:
+                  text += '\ndependencies {\n    ' + dep + '\n}\n'
+              changed = True
+
+          if changed:
+              path.write_text(text)
+              print('Patched', path)
+          else:
+              print('Already configured, nothing to do')
+
+          print('----- ' + str(path) + ' -----')
+          print(path.read_text())
+          PY
+
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Analyze (informational, не блокирует сборку)
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Generate App Icons
         run: dart run flutter_launcher_icons
 
       - name: Build APK
-        run: flutter build apk --release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

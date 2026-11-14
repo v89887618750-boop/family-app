@@ -1,7 +1,9 @@
 # Volkov Family App
 
 Семейный помощник на Flutter (Android): дела, покупки, дни рождения, семья,
-семейный блокнот и Wishlist. Все данные хранятся локально в SQLite (`sqflite`).
+фамильное древо, семейный блокнот и Wishlist. Данные хранятся локально в SQLite
+(`sqflite`), есть необязательная синхронизация между устройствами через
+Supabase (один общий аккаунт семьи).
 
 ## Экраны
 
@@ -10,17 +12,20 @@
 | Главная | `lib/screens/dashboard_screen.dart` | Приветствие, ближайшие ДР, дела на сегодня, быстрые действия |
 | Дела | `lib/screens/tasks_screen.dart` | Вкладки «Все / Сегодня / На неделе / Регулярные», показания счётчиков |
 | Покупки | `lib/screens/purchases_screen.dart` | «В магазин / На неделе / Глобальные», заметки к покупкам |
-| Семья | `lib/screens/family_screen.dart` | Карточки членов семьи, дата рождения и возраст |
+| Семья | `lib/screens/family_screen.dart` | Карточки членов семьи, дата рождения, возраст, связи для древа |
+| Древо | `lib/screens/family_tree_screen.dart` | Граф поколений с зумом; связи родитель/супруг |
 | Заметки | `lib/screens/notes_screen.dart` | Цветные заметки с категориями, фото и поиском |
-| Настройки | `lib/screens/settings_screen.dart` | Тема, размер шрифта, категории |
+| Настройки | `lib/screens/settings_screen.dart` | Тема, размер шрифта, категории, синхронизация |
 | Календарь | `lib/screens/calendar_screen.dart` | Месячная сетка дел и дней рождения |
 | Wishlist | `lib/screens/gifts_screen.dart` | Список желаний по членам семьи |
+| Синхронизация | `lib/screens/sync_screen.dart` | Вход в аккаунт семьи и обмен данными |
 
 ## Технологии
 
 - Flutter `3.24.0`, Dart `>=3.3.0`
-- `sqflite` (SQLite, версия схемы **14**), `path`
+- `sqflite` (SQLite, версия схемы **16**), `path`
 - `flutter_local_notifications` + `timezone` — локальные напоминания
+- `supabase_flutter` — синхронизация (подключается только при наличии ключей)
 - `shared_preferences`, `image_picker`, `url_launcher`, `fl_chart`, `confetti`, `flutter_slidable`
 - `flutter_localizations` — русская локализация дат и календаря
 
@@ -29,12 +34,31 @@
 ```
 lib/
 ├── main.dart                  # тема, локализация, регистрация/главный экран
-├── db/database_helper.dart    # схема БД и миграции
+├── db/database_helper.dart    # схема БД, миграции, триггеры синхронизации
 ├── models/                    # Task, Purchase, Birthday, Gift
-├── screens/                   # экраны приложения
+├── screens/                   # экраны приложения (включая family_tree_screen)
+├── sync/                      # supabase_config, sync_service, sync_db
+├── utils/person_utils.dart    # даты, возраст, ФИО
 ├── utils/notification_service.dart
 └── widgets/item_tile.dart
+
+supabase/schema.sql            # SQL для облака (таблица + RLS)
 ```
+
+## Синхронизация (необязательно)
+
+1. В Supabase → **SQL Editor** выполнить `supabase/schema.sql`
+   (таблица `family_data` + политики RLS).
+2. Supabase → **Authentication → Sign In / Up → Email** → выключить
+   **Confirm email**.
+3. GitHub → **Settings → Secrets and variables → Actions** добавить:
+   - `SUPABASE_URL` — `https://<project-ref>.supabase.co`
+   - `SUPABASE_ANON_KEY` — публичный `anon` (или `publishable`) ключ
+4. Пересобрать APK. В приложении: **Настройки → Синхронизация** →
+   «Создать семью» (один раз), на остальных телефонах — «Войти».
+
+> `service_role`-ключ приложению не нужен — не добавляйте его никуда.
+> Без ключей приложение работает полностью локально, данные в облако не уходят.
 
 ## Сборка APK
 
@@ -45,7 +69,9 @@ lib/
 # локально
 flutter create . --platforms=android --project-name family_lists
 flutter pub get
-flutter build apk --release
+flutter build apk --release \
+  --dart-define=SUPABASE_URL=https://<ref>.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=<anon-key>
 ```
 
 Сборка в GitHub Actions (`.github/workflows/build-apk.yml`) выполняется при
