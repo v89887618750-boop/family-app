@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../db/database_helper.dart';
 import 'gifts_screen.dart';
 
@@ -33,6 +32,31 @@ class _FamilyScreenState extends State<FamilyScreen> {
     setState(() => _members = maps);
   }
 
+  // ФУНКЦИЯ РАСЧЕТА ВОЗРАСТА
+  String _getAge(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '';
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length != 3) return '';
+      
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+      
+      final now = DateTime.now();
+      int age = now.year - year;
+      
+      // Если день рождения в этом году еще не наступил, вычитаем 1 год
+      if (now.month < month || (now.month == month && now.day < day)) {
+        age--;
+      }
+      
+      return '$age лет';
+    } catch (e) {
+      return '';
+    }
+  }
+
   void _showProfile(Map<String, dynamic> member) {
     showModalBottomSheet(
       context: context,
@@ -44,25 +68,20 @@ class _FamilyScreenState extends State<FamilyScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Аватарка
               if (member['photo_path'] != null && File(member['photo_path']).existsSync())
                 CircleAvatar(radius: 60, backgroundImage: FileImage(File(member['photo_path']))),
               const SizedBox(height: 16),
-              // Имя
               Text(member['name'], textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              // Кем является
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(color: Colors.teal.shade100, borderRadius: BorderRadius.circular(20)),
                 child: Text(member['relation'], style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 16),
-              // Дата рождения
               if (member['bday_date'] != null)
-                Text('🎂 ${member['bday_date']}', style: const TextStyle(fontSize: 16)),
+                Text('🎂 ${member['bday_date']} (${_getAge(member['bday_date'])})', style: const TextStyle(fontSize: 16)),
               const SizedBox(height: 24),
-              // Кнопки
               ElevatedButton.icon(
                 icon: const Icon(Icons.card_giftcard),
                 label: Text('Wishlist: ${member['name'].split(' ')[0]}'),
@@ -307,7 +326,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: 0.8, 
+                childAspectRatio: 0.75, // <-- Чуть увеличили высоту карточки
               ),
               itemCount: _members.length,
               itemBuilder: (context, index) {
@@ -328,7 +347,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     ],
                   ),
                   child: InkWell(
-                    onTap: () => _showProfile(member), // <-- Теперь открывается профиль!
+                    onTap: () => _showProfile(member), 
                     child: Card(
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
@@ -348,7 +367,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
                             Text(member['relation'], style: const TextStyle(color: Colors.grey, fontSize: 12)),
                             const SizedBox(height: 4),
                             if (member['bday_date'] != null)
-                              Text(member['bday_date'], style: const TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.bold)),
+                              Column(
+                                children: [
+                                  Text(member['bday_date'], style: const TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.bold)),
+                                  // ВЫВОДИМ ВОЗРАСТ
+                                  Text(_getAge(member['bday_date']), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                ],
+                              ),
                           ],
                         ),
                       ),
