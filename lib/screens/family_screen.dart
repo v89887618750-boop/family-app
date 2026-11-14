@@ -405,12 +405,12 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (photoPath != null && File(photoPath).existsSync())
+                  if (photoPath != null && File(photoPath!).existsSync())
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: CircleAvatar(
                         radius: 40,
-                        backgroundImage: FileImage(File(photoPath)),
+                        backgroundImage: FileImage(File(photoPath!)),
                       ),
                     ),
                   TextButton.icon(
