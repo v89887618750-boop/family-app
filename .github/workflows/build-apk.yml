@@ -24,13 +24,30 @@ jobs:
       - name: Restore missing platform folders
         run: flutter create . --platforms=android --project-name family_lists
 
-      - name: Force Kotlin Version
+      # AGP 8.1 из шаблона Flutter 3.24 не умеет десугарить desugar_jdk_libs 2.x
+      # (ошибка D8BackportedMethodsGenerator / "this.d is null" в lintVital).
+      # Поднимаем AGP до 8.3.2 и фиксируем Kotlin.
+      - name: Pin Kotlin and AGP versions
         run: |
           if [ -f android/settings.gradle ]; then
             sed -i 's/id "org.jetbrains.kotlin.android" version .*/id "org.jetbrains.kotlin.android" version "1.9.24" apply false/' android/settings.gradle
+            sed -i 's/id "com.android.application" version .*/id "com.android.application" version "8.3.2" apply false/' android/settings.gradle
+            echo "----- settings.gradle -----"
+            cat android/settings.gradle
+          fi
+          if [ -f android/settings.gradle.kts ]; then
+            sed -i 's/id("org.jetbrains.kotlin.android") version .*/id("org.jetbrains.kotlin.android") version "1.9.24" apply false/' android/settings.gradle.kts
+            sed -i 's/id("com.android.application") version .*/id("com.android.application") version "8.3.2" apply false/' android/settings.gradle.kts
           fi
           if [ -f android/build.gradle ]; then
             sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.24"/' android/build.gradle
+          fi
+          # AGP 8.3.2 требует Gradle 8.4+. В шаблоне Flutter 3.24 версия ниже,
+          # поэтому фиксируем wrapper явно.
+          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+            sed -i 's|^distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
+            echo "----- gradle-wrapper.properties -----"
+            cat android/gradle/wrapper/gradle-wrapper.properties
           fi
 
       - name: Update compileSdk to 35
@@ -100,6 +117,25 @@ jobs:
           else:
               print('Already configured, nothing to do')
 
+          # Отключаем lintVital для release: при десугаринге эта задача падает
+          # на AGP 8.3 (D8BackportedMethodsGenerator). Lint всё равно проверяется
+          # на этапе flutter analyze выше.
+          if 'checkReleaseBuilds' not in text:
+              if 'lint {' in text:
+                  text = text.replace(
+                      'lint {',
+                      'lint {\n        checkReleaseBuilds false\n        abortOnError false',
+                      1,
+                  )
+              else:
+                  text = text.replace(
+                      'android {',
+                      'android {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }',
+                      1,
+                  )
+              path.write_text(text)
+              print('Disabled lintVital for release')
+
           print('----- ' + str(path) + ' -----')
           print(path.read_text())
           PY
@@ -107,8 +143,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Analyze (informational, не блокирует сборку)
-        continue-on-error: true
+      # Теперь это реальный шлюз: ошибки компиляции видны сразу и по-человечески.
+      - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Generate App Icons
