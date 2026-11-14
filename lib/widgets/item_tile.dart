@@ -25,7 +25,6 @@ class ItemTile extends StatelessWidget {
     this.onShowStats,
   });
 
-  // Функция подтверждения удаления
   Future<void> _confirmDelete(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -34,10 +33,7 @@ class ItemTile extends StatelessWidget {
         content: Text('Вы уверены, что хотите удалить "$title"?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true), 
-            child: const Text('Удалить', style: TextStyle(color: Colors.red))
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -48,13 +44,12 @@ class ItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Slidable(
       key: Key(title + subtitle),
-      // Свайп влево (удаление)
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
         extentRatio: 0.25,
         children: [
           SlidableAction(
-            onPressed: (context) => _confirmDelete(context), // Вызов подтверждения
+            onPressed: (context) => _confirmDelete(context), 
             backgroundColor: Colors.red,
             foregroundColor: Colors.white,
             icon: Icons.delete,
@@ -63,7 +58,6 @@ class ItemTile extends StatelessWidget {
           ),
         ],
       ),
-      // Свайп вправо (редактирование)
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
         children: [
@@ -80,15 +74,12 @@ class ItemTile extends StatelessWidget {
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: ListTile(
-          onTap: onEdit, 
+          onTap: onEdit, // <-- ВОТ ОНА, ПРИВЯЗКА К РЕДАКТОРУ
           leading: Checkbox(value: isCompleted, onChanged: (_) => onToggle()),
           title: Row(
             children: [
-              // Иконка лампочки для счетчиков
-              if (readingValue != null) 
-                const Icon(Icons.lightbulb, size: 18, color: Colors.orange),
-              if (readingValue != null) 
-                const SizedBox(width: 6),
+              if (readingValue != null) const Icon(Icons.lightbulb, size: 18, color: Colors.orange),
+              if (readingValue != null) const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   title,
@@ -104,23 +95,14 @@ class ItemTile extends StatelessWidget {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                subtitle, 
-                style: TextStyle(color: isOverdue && !isCompleted ? Colors.red.shade300 : null)
-              ),
-              // Показываем последние введенные показания
+              Text(subtitle, style: TextStyle(color: isOverdue && !isCompleted ? Colors.red.shade300 : null)),
               if (readingValue != null)
-                Text(
-                  'Показания: $readingValue', 
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)
-                ),
+                Text('Показания: $readingValue', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
             ],
           ),
-          // Кнопка графика (появляется только если это счетчик)
           trailing: readingValue != null && onShowStats != null
               ? IconButton(
                   icon: const Icon(Icons.bar_chart, color: Colors.teal),
-                  tooltip: 'Статистика потребления',
                   onPressed: onShowStats,
                 )
               : null,
