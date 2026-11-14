@@ -22,7 +22,10 @@ dependencies:
   fl_chart: ^0.68.0
   confetti: ^0.7.0
   shared_preferences: ^2.2.2
-  supabase_flutter: ^2.5.0
+  # Синхронизация: чистый HTTP, без нативных плагинов.
+  # supabase_flutter здесь НЕ используется — он тянет app_links,
+  # который ломает сборку на Flutter 3.24 / AGP 8.3.
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

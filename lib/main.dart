@@ -2,29 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/registration_screen.dart';
-import 'sync/supabase_config.dart';
+import 'sync/sync_service.dart';
 import 'utils/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Синхронизация подключается только если при сборке передали ключи.
-  // Без них приложение работает полностью локально.
-  if (SupabaseConfig.isConfigured) {
-    try {
-      await Supabase.initialize(
-        url: SupabaseConfig.url,
-        anonKey: SupabaseConfig.anonKey,
-      );
-      SupabaseConfig.ready = true;
-    } catch (e) {
-      debugPrint('Supabase не инициализирован: $e');
-    }
-  }
+  // Синхронизация работает на чистом HTTP (без нативных плагинов).
+  // Если при сборке не передали ключи — приложение полностью локальное.
+  await SyncService.init();
 
   await NotificationService.init();
 

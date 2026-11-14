@@ -24,8 +24,8 @@ class SupabaseConfig {
 
   static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 
-  /// Ставится в `true` после успешного `Supabase.initialize` в main().
-  /// Пока false — обращаться к Supabase нельзя (иначе исключение).
+  /// Ставится в `true` из [SyncService.init] в main(), если ключи переданы.
+  /// Пока false — экран синхронизации показывает, что она не настроена.
   static bool ready = false;
 
   /// Ключи переданы И клиент инициализирован.

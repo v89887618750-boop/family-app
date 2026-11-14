@@ -1,5 +1,8 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../db/database_helper.dart';
 import 'supabase_config.dart';
@@ -32,17 +35,30 @@ class SyncResult {
 
 /// Синхронизация локальной SQLite-базы с Supabase.
 ///
-/// Принцип: локальная база — главный источник, приложение работает офлайн.
-/// Обмен построен на трёх полях каждой строки:
-///   * `sync_id` — одинаковый идентификатор на всех устройствах;
-///   * `updated_at` — время последнего изменения (мс epoch);
-///   * надгробия в `sync_tombstones` — для удалений.
+/// Сознательно НЕ используется `supabase_flutter`: он тянет нативные плагины
+/// (app_links), которые ломают сборку на Flutter 3.24 / AGP 8.3.
+/// Здесь всё сделано на чистом HTTP — без единого нативного плагина:
+///   * вход/регистрация — Supabase Auth (`/auth/v1/token`, `/auth/v1/signup`);
+///   * данные          — PostgREST (`/rest/v1/family_data`).
 ///
-/// Конфликты решаются по принципу «побеждает более позднее изменение»
-/// (last-write-wins по строке): сначала забираем облако, потом отправляем своё.
+/// Принцип синхронизации: локальная база главная, приложение работает офлайн.
+/// У каждой строки есть `sync_id` (UUID) и `updated_at` (мс epoch), которые
+/// проставляют SQLite-триггеры; удаления фиксируются в `sync_tombstones`.
+/// Конфликты решаются по принципу «побеждает более поздняя правка».
 class SyncService {
-  /// Таблица в Supabase, где лежат данные семьи.
   static const String _remoteTable = 'family_data';
+  static const Duration _timeout = Duration(seconds: 30);
+
+  // Ключи для хранения сессии между запусками.
+  static const String _kAccess = 'sb_access_token';
+  static const String _kRefresh = 'sb_refresh_token';
+  static const String _kExpires = 'sb_expires_at';
+  static const String _kEmail = 'sb_email';
+
+  static String? _accessToken;
+  static String? _refreshToken;
+  static int _expiresAtMs = 0;
+  static String? _email;
 
   /// Какие поля каждой таблицы попадают в облако.
   /// Порядок таблиц в [DatabaseHelper.syncTables] важен: сначала те,
@@ -94,19 +110,47 @@ class SyncService {
     'meter_readings': <String>['reading_value', 'date'],
   };
 
-  static SupabaseClient get _client => Supabase.instance.client;
+  // ---------------------------------------------------------------------------
+  // Инициализация и состояние сессии
+  // ---------------------------------------------------------------------------
 
-  /// Ключи переданы и клиент Supabase инициализирован.
-  static bool get isConfigured => SupabaseConfig.isReady;
+  /// Загружает сохранённую сессию. Вызывается один раз в main().
+  static Future<void> init() async {
+    if (!SupabaseConfig.isConfigured) {
+      SupabaseConfig.ready = false;
+      return;
+    }
 
-  static bool get isSignedIn {
-    if (!isConfigured) return false;
-    return _client.auth.currentSession != null;
+    final prefs = await SharedPreferences.getInstance();
+    _accessToken = prefs.getString(_kAccess);
+    _refreshToken = prefs.getString(_kRefresh);
+    _expiresAtMs = prefs.getInt(_kExpires) ?? 0;
+    _email = prefs.getString(_kEmail);
+    SupabaseConfig.ready = true;
   }
 
-  static String? get currentEmail {
-    if (!isSignedIn) return null;
-    return _client.auth.currentUser?.email;
+  static bool get isConfigured => SupabaseConfig.isConfigured;
+
+  static bool get isSignedIn => isConfigured && (_accessToken ?? '').isNotEmpty;
+
+  static String? get currentEmail => _email;
+
+  static Future<void> _persistSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_accessToken != null) {
+      await prefs.setString(_kAccess, _accessToken!);
+    } else {
+      await prefs.remove(_kAccess);
+    }
+    if (_refreshToken != null) {
+      await prefs.setString(_kRefresh, _refreshToken!);
+    } else {
+      await prefs.remove(_kRefresh);
+    }
+    await prefs.setInt(_kExpires, _expiresAtMs);
+    if (_email != null) {
+      await prefs.setString(_kEmail, _email!);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -117,56 +161,141 @@ class SyncService {
     if (!isConfigured) {
       throw const SyncException('Синхронизация не настроена на этой сборке.');
     }
-    try {
-      await _client.auth.signInWithPassword(
-        email: email.trim(),
-        password: password,
-      );
-    } on AuthException catch (e) {
-      throw SyncException(_authMessage(e.message));
-    }
+    final uri = Uri.parse('${SupabaseConfig.url}/auth/v1/token?grant_type=password');
+    final response = await http
+        .post(
+          uri,
+          headers: _baseHeaders(),
+          body: jsonEncode({'email': email.trim(), 'password': password}),
+        )
+        .timeout(_timeout);
+
+    _applyAuthResponse(response, fallbackEmail: email.trim());
+    await _persistSession();
   }
 
   static Future<void> signUp(String email, String password) async {
     if (!isConfigured) {
       throw const SyncException('Синхронизация не настроена на этой сборке.');
     }
-    try {
-      final response = await _client.auth.signUp(
-        email: email.trim(),
-        password: password,
-      );
-      if (response.session == null) {
-        throw const SyncException(
-          'Аккаунт создан, но Supabase требует подтверждение почты. '
-          'В Supabase откройте Authentication → Sign In / Up → Email '
-          'и выключите «Confirm email», затем попробуйте войти.',
-        );
-      }
-    } on AuthException catch (e) {
-      throw SyncException(_authMessage(e.message));
-    }
+    final uri = Uri.parse('${SupabaseConfig.url}/auth/v1/signup');
+    final response = await http
+        .post(
+          uri,
+          headers: _baseHeaders(),
+          body: jsonEncode({'email': email.trim(), 'password': password}),
+        )
+        .timeout(_timeout);
+
+    _applyAuthResponse(
+      response,
+      fallbackEmail: email.trim(),
+      missingTokenHint: 'Аккаунт создан, но Supabase требует подтверждение '
+          'почты. В Supabase откройте Authentication → Sign In / Up → Email '
+          'и выключите «Confirm email», затем войдите.',
+    );
+    await _persistSession();
   }
 
   static Future<void> signOut() async {
-    if (!isConfigured) return;
-    await _client.auth.signOut();
+    _accessToken = null;
+    _refreshToken = null;
+    _expiresAtMs = 0;
+    _email = null;
+    await _persistSession();
   }
 
-  static String _authMessage(String message) {
-    if (message.contains('Invalid login credentials')) {
+  static Map<String, String> _baseHeaders() {
+    return <String, String>{
+      'apikey': SupabaseConfig.anonKey,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+  }
+
+  static Map<String, String> _authHeaders() {
+    return <String, String>{
+      'apikey': SupabaseConfig.anonKey,
+      'Authorization': 'Bearer ${_accessToken ?? ''}',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+  }
+
+  static void _applyAuthResponse(
+    http.Response response, {
+    required String fallbackEmail,
+    String? missingTokenHint,
+  }) {
+    final body = _decodeMap(response.body);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final token = body['access_token'];
+      if (token is! String || token.isEmpty) {
+        throw SyncException(
+          missingTokenHint ??
+              'Supabase не вернул токен доступа. Включено подтверждение почты? '
+                  'Выключите «Confirm email» в Authentication → Sign In / Up.',
+        );
+      }
+
+      _accessToken = token;
+      final refresh = body['refresh_token'];
+      _refreshToken = refresh is String ? refresh : null;
+
+      final expiresIn = body['expires_in'];
+      final seconds = expiresIn is num ? expiresIn.toInt() : 3600;
+      _expiresAtMs =
+          DateTime.now().millisecondsSinceEpoch + seconds * 1000;
+
+      _email = _extractEmail(body) ?? fallbackEmail;
+      return;
+    }
+
+    throw SyncException(_authErrorText(response, body));
+  }
+
+  static String? _extractEmail(Map<String, dynamic> body) {
+    final direct = body['email'];
+    if (direct is String && direct.isNotEmpty) return direct;
+
+    final user = body['user'];
+    if (user is Map) {
+      final email = user['email'];
+      if (email is String && email.isNotEmpty) return email;
+    }
+    return null;
+  }
+
+  static String _authErrorText(
+    http.Response response,
+    Map<String, dynamic> body,
+  ) {
+    final raw = body['error_description'] ??
+        body['msg'] ??
+        body['message'] ??
+        body['error'];
+    final text = raw is String ? raw : '';
+
+    if (text.contains('Invalid login credentials')) {
       return 'Неверный e-mail или пароль.';
     }
-    if (message.contains('already registered')) {
-      return 'Такая почта уже зарегистрирована — войдите с этим паролем.';
+    if (text.contains('already registered') ||
+        text.contains('User already registered')) {
+      return 'Такая почта уже зарегистрирована — нажмите «Войти» с этим паролем.';
     }
-    if (message.contains('Password should be')) {
+    if (text.contains('Password should be')) {
       return 'Слишком простой пароль: нужно не меньше 6 символов.';
     }
-    if (message.contains('Email not confirmed')) {
+    if (text.contains('Email not confirmed')) {
       return 'Почта не подтверждена. Отключите «Confirm email» в Supabase.';
     }
-    return message;
+    if (text.contains('Invalid API key') || response.statusCode == 401) {
+      return 'Неверный anon-ключ (SUPABASE_ANON_KEY). Проверьте секрет в GitHub.';
+    }
+
+    if (text.isNotEmpty) return text;
+    return 'Ошибка ${response.statusCode}. Проверьте SUPABASE_URL и anon-ключ.';
   }
 
   // ---------------------------------------------------------------------------
@@ -198,19 +327,68 @@ class SyncService {
     await _writeMeta(db, 'last_push', 0);
   }
 
+  static Future<void> _refreshIfNeeded() async {
+    if ((_accessToken ?? '').isEmpty) {
+      throw const SyncException('Нужно войти в аккаунт семьи.');
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_expiresAtMs - now > 60000) return;
+
+    final refresh = _refreshToken;
+    if (refresh == null || refresh.isEmpty) {
+      await signOut();
+      throw const SyncException('Сессия истекла — войдите заново.');
+    }
+
+    final uri =
+        Uri.parse('${SupabaseConfig.url}/auth/v1/token?grant_type=refresh_token');
+    final response = await http
+        .post(
+          uri,
+          headers: _baseHeaders(),
+          body: jsonEncode({'refresh_token': refresh}),
+        )
+        .timeout(_timeout);
+
+    _applyAuthResponse(
+      response,
+      fallbackEmail: _email ?? '',
+      missingTokenHint: 'Не удалось продлить сессию — войдите заново.',
+    );
+    await _persistSession();
+  }
+
   static Future<int> _pull(Database db, int since, List<String> errors) async {
     var processed = 0;
 
     try {
-      final data = await _client.from(_remoteTable).select();
-      final rows = (data as List).cast<Map<String, dynamic>>();
-      var maxUpdated = since;
+      await _refreshIfNeeded();
 
+      final uri = Uri.parse(
+        '${SupabaseConfig.url}/rest/v1/$_remoteTable?select=*',
+      );
+      final response =
+          await http.get(uri, headers: _authHeaders()).timeout(_timeout);
+
+      if (response.statusCode != 200) {
+        throw SyncException(_restErrorText(response));
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final rows = <Map<String, dynamic>>[];
+      if (decoded is List) {
+        for (final item in decoded) {
+          if (item is Map<String, dynamic>) rows.add(item);
+        }
+      }
+
+      var maxUpdated = since;
       for (final row in rows) {
         try {
           await _applyRemoteRow(db, row);
         } catch (e) {
-          errors.add('Получение ($e)');
+          errors.add('Получение: $e');
         }
         final updated = row['updated_at'];
         if (updated is int && updated > maxUpdated) maxUpdated = updated;
@@ -219,7 +397,7 @@ class SyncService {
 
       await _writeMeta(db, 'last_pull', maxUpdated);
     } catch (e) {
-      errors.add('Не удалось получить данные: $e');
+      errors.add(e is SyncException ? e.message : 'Не удалось получить данные: $e');
     }
 
     return processed;
@@ -236,12 +414,31 @@ class SyncService {
 
       if (outgoing.isEmpty) return 0;
 
+      await _refreshIfNeeded();
+
+      final uri = Uri.parse(
+        '${SupabaseConfig.url}/rest/v1/$_remoteTable?on_conflict=sync_id',
+      );
+
       for (var index = 0; index < outgoing.length; index += 200) {
-        final end = index + 200 <= outgoing.length
-            ? index + 200
-            : outgoing.length;
+        final end =
+            index + 200 <= outgoing.length ? index + 200 : outgoing.length;
         final chunk = outgoing.sublist(index, end);
-        await _client.from(_remoteTable).upsert(chunk, onConflict: 'sync_id');
+
+        final response = await http
+            .post(
+              uri,
+              headers: <String, String>{
+                ..._authHeaders(),
+                'Prefer': 'resolution=merge-duplicates,return=minimal',
+              },
+              body: jsonEncode(chunk),
+            )
+            .timeout(_timeout);
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw SyncException(_restErrorText(response));
+        }
       }
 
       var maxLocal = since;
@@ -253,9 +450,29 @@ class SyncService {
 
       return outgoing.length;
     } catch (e) {
-      errors.add('Не удалось отправить данные: $e');
+      errors.add(e is SyncException ? e.message : 'Не удалось отправить данные: $e');
       return 0;
     }
+  }
+
+  static String _restErrorText(http.Response response) {
+    final body = _decodeMap(response.body);
+    final raw = body['message'] ?? body['error_description'] ?? body['hint'];
+    final text = raw is String ? raw : '';
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      return 'Нет доступа к данным: войдите в аккаунт заново.';
+    }
+    if (response.statusCode == 404) {
+      return 'Таблица family_data не найдена. Выполните supabase/schema.sql '
+          'в Supabase → SQL Editor.';
+    }
+    if (text.contains('row-level security') ||
+        text.contains('new row violates row-level security')) {
+      return 'RLS заблокировал запись. Проверьте политики из supabase/schema.sql.';
+    }
+    if (text.isNotEmpty) return text;
+    return 'Ошибка ${response.statusCode} при обращении к облаку.';
   }
 
   // ---------------------------------------------------------------------------
@@ -407,6 +624,16 @@ class SyncService {
   // ---------------------------------------------------------------------------
   // Вспомогательные запросы
   // ---------------------------------------------------------------------------
+
+  static Map<String, dynamic> _decodeMap(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {
+      // тело не JSON — ничего страшного
+    }
+    return <String, dynamic>{};
+  }
 
   static int _asInt(Object? value) {
     if (value is int) return value;

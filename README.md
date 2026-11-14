@@ -25,7 +25,9 @@ Supabase (один общий аккаунт семьи).
 - Flutter `3.24.0`, Dart `>=3.3.0`
 - `sqflite` (SQLite, версия схемы **16**), `path`
 - `flutter_local_notifications` + `timezone` — локальные напоминания
-- `supabase_flutter` — синхронизация (подключается только при наличии ключей)
+- `http` — синхронизация с Supabase напрямую через REST/Auth
+  (без `supabase_flutter`: он тянет нативный `app_links`, ломающий
+  сборку на Flutter 3.24 / AGP 8.3)
 - `shared_preferences`, `image_picker`, `url_launcher`, `fl_chart`, `confetti`, `flutter_slidable`
 - `flutter_localizations` — русская локализация дат и календаря
 

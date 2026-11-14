@@ -89,6 +89,31 @@
 - Если ключи при сборке не переданы — приложение работает локально,
   а экран синхронизации сообщает, что она не настроена.
 
+### Почему без `supabase_flutter`
+
+Первая попытка использовала пакет `supabase_flutter`, но сборка упала
+на нативном плагине `app_links` (транзитивная зависимость):
+
+```
+Could not get unknown property 'flutter' for extension 'android'
+Build file '.../app_links-6.4.1/android/build.gradle' line: 28
+```
+
+Это несовместимость `app_links` с Flutter 3.24 / AGP 8.3, к нашему коду
+отношения не имеет. Вместо подбора версий плагина синхронизация переписана
+на **чистый HTTP** через пакет `http`:
+
+- вход/регистрация — `POST {url}/auth/v1/token?grant_type=password`
+  и `POST {url}/auth/v1/signup`;
+- чтение — `GET {url}/rest/v1/family_data?select=*`;
+- запись — `POST {url}/rest/v1/family_data?on_conflict=sync_id`
+  с заголовком `Prefer: resolution=merge-duplicates`;
+- токены (access + refresh, срок жизни) хранятся в `shared_preferences`,
+  токен продлевается автоматически.
+
+Итог: в проекте больше нет ни одного нативного плагина ради синхронизации,
+и проблема Gradle исчезла вместе с ним.
+
 ### Настройка (один раз)
 
 1. Supabase → **SQL Editor** → выполнить `supabase/schema.sql`.
