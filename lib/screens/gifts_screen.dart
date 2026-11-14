@@ -100,26 +100,35 @@ class _GiftsScreenState extends State<GiftsScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (titleController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Напишите, что подарить!')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Напишите, что подарить!')),
+                  );
                   return;
                 }
+                
                 final db = await DatabaseHelper.instance.database;
                 final gift = Gift(
                   title: titleController.text.trim(), 
                   forWhom: targetForWhom, 
                   category: 'Подарок', 
-                  isBought: item?.isBought ?? false, 
-                  note: noteController.text.trim(), 
-                  photoPath: photoPath,
-                  reservedBy: item?.reservedBy // Сохраняем резерв, если был
+                  isBought: item?.isBought ?? false,
+                  note: noteController.text.trim(),
+                  photoPath: photoPath
                 );
-                if (item == null) {
-                  await db.insert('gifts', gift.toMap());
-                } else {
-                  await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                
+                try {
+                  if (item == null) {
+                    await db.insert('gifts', gift.toMap());
+                  } else {
+                    await db.update('gifts', gift.toMap(), where: 'id = ?', whereArgs: [item.id]);
+                  }
+                  if (mounted) Navigator.pop(context);
+                  _loadGifts();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка сохранения: $e')),
+                  );
                 }
-                if (mounted) Navigator.pop(context);
-                _loadGifts();
               },
               child: const Text('Сохранить'),
             ),
