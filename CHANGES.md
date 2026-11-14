@@ -114,6 +114,36 @@ Build file '.../app_links-6.4.1/android/build.gradle' line: 28
 Итог: в проекте больше нет ни одного нативного плагина ради синхронизации,
 и проблема Gradle исчезла вместе с ним.
 
+### Исправления по результатам следующих сборок
+
+**1. `flutter analyze` падал на чужом тесте.**
+`flutter create` в CI генерирует `test/widget_test.dart`, который ссылается
+на несуществующий `MyApp` → ошибка `The name 'MyApp' isn't a class`.
+Теперь в репозитории лежит собственный `test/widget_test.dart` с тестами
+чистых функций (`parseFlexibleDate`, `pluralize`, `ageText`, `splitFullName`) —
+`flutter create` не перезаписывает существующие файлы.
+
+Заодно шаг `Analyze` в CI стал **блокирующим** (раньше был `continue-on-error`):
+теперь ошибки компиляции видны точным сообщением `файл:строка: Error: …`,
+а не тонут в логах Gradle.
+
+**2. `lintVitalAnalyzeRelease` падал на D8 при десугаринге.**
+
+```
+Execution failed for task ':app:lintVitalAnalyzeRelease'.
+> Failed to transform FakeDependency.jar ...
+  > D8BackportedMethodsGenerator ... Cannot invoke "JT.warning(...)" because "this.d" is null
+```
+
+Причина: AGP 8.1 из шаблона Flutter 3.24 не умеет десугарить
+`desugar_jdk_libs 2.0.4`. Исправлено в воркфлоу:
+
+- AGP поднят до **8.3.2**, Gradle wrapper зафиксирован на **8.7**
+  (AGP 8.3 требует Gradle 8.4+), Kotlin остаётся 1.9.24;
+- в `android/app/build.gradle` добавляется `lint { checkReleaseBuilds false }`
+  — задача `lintVital` для release больше не запускается (сам анализ кода
+  выполняет `flutter analyze`).
+
 ### Настройка (один раз)
 
 1. Supabase → **SQL Editor** → выполнить `supabase/schema.sql`.
