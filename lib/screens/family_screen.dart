@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../db/database_helper.dart';
+import '../utils/person_utils.dart';
+import 'family_tree_screen.dart';
 import 'gifts_screen.dart';
 
 /// «Моя семья»: карточки членов семьи, дата рождения и автоматический
@@ -244,7 +246,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     );
   }
 
-  void _showProfile(Map<String, dynamic> member) {
+  Future<void> _showProfile(Map<String, dynamic> member) async {
     final photoPath = member['photo_path'] as String?;
     final fullName = (member['name'] as String?) ?? '';
     final relation = (member['relation'] as String?) ?? '';
@@ -253,6 +255,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final nextBirthday = _nextBirthdayText(bdayDate);
     final birthDate = _parseDate(bdayDate);
     final shortName = _splitFullName(fullName)['name'] ?? '';
+
+    // Связи для древа (отец, мать, супруг, дети).
+    final relationLines = await _relationSummary(member['id'] as int?);
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -327,6 +334,19 @@ class _FamilyScreenState extends State<FamilyScreen> {
                     'Дата рождения не указана',
                     style: TextStyle(color: Colors.grey),
                   ),
+                if (relationLines.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ...relationLines.map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        line,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.card_giftcard),
@@ -384,6 +404,29 @@ class _FamilyScreenState extends State<FamilyScreen> {
     int? selectedDay = existingBirthDate?.day;
     int? selectedMonth = existingBirthDate?.month;
     int? selectedYear = existingBirthDate?.year;
+
+    // Связи для древа: список кандидатов и текущие значения.
+    final int? currentMemberId = member == null ? null : member['id'] as int?;
+    final candidates = await _loadCandidates(currentMemberId);
+    final existingRelations = await _loadRelationsFor(currentMemberId);
+
+    int selectedFatherId = existingRelations['father'] ?? 0;
+    int selectedMotherId = existingRelations['mother'] ?? 0;
+    int selectedSpouseId = existingRelations['spouse'] ?? 0;
+
+    // Если сохранённая связь указывает на человека, которого больше нет
+    // в списке кандидатов, сбрасываем выбор: иначе Dropdown упадёт
+    // с «There should be exactly one item with value».
+    final candidateIds = candidates.map((c) => c['id'] as int?).toSet();
+    if (selectedFatherId != 0 && !candidateIds.contains(selectedFatherId)) {
+      selectedFatherId = 0;
+    }
+    if (selectedMotherId != 0 && !candidateIds.contains(selectedMotherId)) {
+      selectedMotherId = 0;
+    }
+    if (selectedSpouseId != 0 && !candidateIds.contains(selectedSpouseId)) {
+      selectedSpouseId = 0;
+    }
 
     if (!mounted) return;
 
@@ -545,6 +588,100 @@ class _FamilyScreenState extends State<FamilyScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Связи в древе',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    value: selectedFatherId,
+                    decoration: const InputDecoration(
+                      labelText: 'Отец',
+                      border: border,
+                    ),
+                    items: [
+                      const DropdownMenuItem<int>(
+                        value: 0,
+                        child: Text('— не указан —'),
+                      ),
+                      ...candidates.map(
+                        (candidate) => DropdownMenuItem<int>(
+                          value: candidate['id'] as int,
+                          child: Text(
+                            memberLabel(
+                              candidate['name'] as String?,
+                              candidate['relation'] as String? ?? '',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => selectedFatherId = value ?? 0),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    value: selectedMotherId,
+                    decoration: const InputDecoration(
+                      labelText: 'Мать',
+                      border: border,
+                    ),
+                    items: [
+                      const DropdownMenuItem<int>(
+                        value: 0,
+                        child: Text('— не указана —'),
+                      ),
+                      ...candidates.map(
+                        (candidate) => DropdownMenuItem<int>(
+                          value: candidate['id'] as int,
+                          child: Text(
+                            memberLabel(
+                              candidate['name'] as String?,
+                              candidate['relation'] as String? ?? '',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => selectedMotherId = value ?? 0),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    value: selectedSpouseId,
+                    decoration: const InputDecoration(
+                      labelText: 'Супруг(а)',
+                      border: border,
+                    ),
+                    items: [
+                      const DropdownMenuItem<int>(
+                        value: 0,
+                        child: Text('— не указан —'),
+                      ),
+                      ...candidates.map(
+                        (candidate) => DropdownMenuItem<int>(
+                          value: candidate['id'] as int,
+                          child: Text(
+                            memberLabel(
+                              candidate['name'] as String?,
+                              candidate['relation'] as String? ?? '',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => selectedSpouseId = value ?? 0),
+                  ),
+                  if (candidates.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text(
+                        'Чтобы указать связи, добавьте других членов семьи.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -563,6 +700,28 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   if (surname.isEmpty && name.isEmpty) {
                     _showMessage('Введите хотя бы имя и фамилию');
                     return;
+                  }
+
+                  final fatherId = selectedFatherId == 0 ? null : selectedFatherId;
+                  final motherId = selectedMotherId == 0 ? null : selectedMotherId;
+                  final spouseId = selectedSpouseId == 0 ? null : selectedSpouseId;
+
+                  // Защита от циклов: отец/мать не могут быть потомками.
+                  if (currentMemberId != null) {
+                    if (fatherId != null &&
+                        await _isDescendant(fatherId, currentMemberId)) {
+                      _showMessage(
+                        'Нельзя: выбранный «отец» — потомок этого человека',
+                      );
+                      return;
+                    }
+                    if (motherId != null &&
+                        await _isDescendant(motherId, currentMemberId)) {
+                      _showMessage(
+                        'Нельзя: выбранная «мать» — потомок этого человека',
+                      );
+                      return;
+                    }
                   }
 
                   var fullName = [surname, name, patronymic]
@@ -622,16 +781,25 @@ class _FamilyScreenState extends State<FamilyScreen> {
                       'birthday_id': birthdayId,
                     };
 
+                    int memberId;
                     if (member == null) {
-                      await db.insert('family_members', memberData);
+                      memberId = await db.insert('family_members', memberData);
                     } else {
+                      memberId = member['id'] as int;
                       await db.update(
                         'family_members',
                         memberData,
                         where: 'id = ?',
-                        whereArgs: [member['id']],
+                        whereArgs: [memberId],
                       );
                     }
+
+                    await _saveRelations(
+                      memberId,
+                      fatherId: fatherId,
+                      motherId: motherId,
+                      spouseId: spouseId,
+                    );
 
                     if (mounted) Navigator.pop(dialogContext);
                     await _loadMembers();
@@ -649,6 +817,186 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   String _asString(dynamic value) => value is String ? value : (value?.toString() ?? '');
+
+  // ---------------------------------------------------------------------------
+  // Связи для фамильного древа
+  // ---------------------------------------------------------------------------
+
+  /// Все члены семьи, кроме текущего (его нельзя выбрать отцом/супругом себе).
+  Future<List<Map<String, dynamic>>> _loadCandidates(int? excludeId) async {
+    final db = await DatabaseHelper.instance.database;
+    if (excludeId == null) {
+      return db.query('family_members', orderBy: 'name ASC');
+    }
+    return db.query(
+      'family_members',
+      where: 'id != ?',
+      whereArgs: [excludeId],
+      orderBy: 'name ASC',
+    );
+  }
+
+  /// Текущие связи человека: id отца, матери и супруга.
+  Future<Map<String, int?>> _loadRelationsFor(int? memberId) async {
+    final result = <String, int?>{'father': null, 'mother': null, 'spouse': null};
+    if (memberId == null) return result;
+
+    final db = await DatabaseHelper.instance.database;
+
+    final parents = await db.query(
+      'relations',
+      where: "b_id = ? AND (type = 'father' OR type = 'mother')",
+      whereArgs: [memberId],
+    );
+    for (final row in parents) {
+      final type = row['type'] as String?;
+      final parentId = row['a_id'] as int?;
+      if (type == 'father') result['father'] = parentId;
+      if (type == 'mother') result['mother'] = parentId;
+    }
+
+    final spouses = await db.query(
+      'relations',
+      where: "(a_id = ? OR b_id = ?) AND type = 'spouse'",
+      whereArgs: [memberId, memberId],
+    );
+    if (spouses.isNotEmpty) {
+      final row = spouses.first;
+      final aId = row['a_id'] as int?;
+      final bId = row['b_id'] as int?;
+      result['spouse'] = aId == memberId ? bId : aId;
+    }
+
+    return result;
+  }
+
+  /// Перезаписывает связи человека (отец, мать, супруг).
+  Future<void> _saveRelations(
+    int memberId, {
+    int? fatherId,
+    int? motherId,
+    int? spouseId,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+
+    await db.delete(
+      'relations',
+      where: "(b_id = ? AND (type = 'father' OR type = 'mother')) OR "
+          "(type = 'spouse' AND (a_id = ? OR b_id = ?))",
+      whereArgs: [memberId, memberId, memberId],
+    );
+
+    if (fatherId != null) {
+      await db.insert('relations', {
+        'a_id': fatherId,
+        'b_id': memberId,
+        'type': 'father',
+      });
+    }
+    if (motherId != null) {
+      await db.insert('relations', {
+        'a_id': motherId,
+        'b_id': memberId,
+        'type': 'mother',
+      });
+    }
+    if (spouseId != null) {
+      await db.insert('relations', {
+        'a_id': memberId,
+        'b_id': spouseId,
+        'type': 'spouse',
+      });
+    }
+  }
+
+  /// Проверяет, является ли [candidateId] потомком [ancestorId].
+  /// Нужно, чтобы нельзя было сделать отцом собственного внука.
+  Future<bool> _isDescendant(int candidateId, int ancestorId) async {
+    if (candidateId == ancestorId) return true;
+
+    final db = await DatabaseHelper.instance.database;
+    final visited = <int>{ancestorId};
+    var frontier = <int>[ancestorId];
+
+    for (var depth = 0; depth < 30 && frontier.isNotEmpty; depth++) {
+      final placeholders = List.filled(frontier.length, '?').join(',');
+      final rows = await db.query(
+        'relations',
+        where:
+            "type IN ('father', 'mother') AND a_id IN ($placeholders)",
+        whereArgs: frontier,
+      );
+
+      final next = <int>[];
+      for (final row in rows) {
+        final childId = row['b_id'] as int?;
+        if (childId == null) continue;
+        if (childId == candidateId) return true;
+        if (visited.add(childId)) next.add(childId);
+      }
+      frontier = next;
+    }
+
+    return false;
+  }
+
+  /// Строки для профиля: «Отец: …», «Дети: …».
+  Future<List<String>> _relationSummary(int? memberId) async {
+    if (memberId == null) return const <String>[];
+
+    final db = await DatabaseHelper.instance.database;
+
+    final members = await db.query('family_members');
+    final names = <int, String>{};
+    for (final row in members) {
+      final id = row['id'] as int?;
+      final name = row['name'] as String?;
+      if (id != null && name != null) names[id] = name;
+    }
+
+    final rows = await db.query(
+      'relations',
+      where: 'a_id = ? OR b_id = ?',
+      whereArgs: [memberId, memberId],
+    );
+
+    String? fatherName;
+    String? motherName;
+    String? spouseName;
+    final children = <String>[];
+
+    for (final row in rows) {
+      final aId = row['a_id'] as int?;
+      final bId = row['b_id'] as int?;
+      final type = row['type'] as String?;
+      if (aId == null || bId == null || type == null) continue;
+
+      if (type == 'spouse') {
+        final otherId = aId == memberId ? bId : aId;
+        final name = names[otherId] ?? '';
+        if (name.isNotEmpty) spouseName = name;
+      } else if (bId == memberId) {
+        final name = names[aId] ?? '';
+        if (name.isEmpty) continue;
+        if (type == 'father') {
+          fatherName = name;
+        } else {
+          motherName = name;
+        }
+      } else if (aId == memberId) {
+        final name = names[bId] ?? '';
+        if (name.isNotEmpty) children.add(name);
+      }
+    }
+
+    final lines = <String>[];
+    if (fatherName != null) lines.add('Отец: $fatherName');
+    if (motherName != null) lines.add('Мать: $motherName');
+    if (spouseName != null) lines.add('Супруг(а): $spouseName');
+    if (children.isNotEmpty) lines.add('Дети: ${children.join(', ')}');
+
+    return lines;
+  }
 
   Future<void> _deleteMember(Map<String, dynamic> member) async {
     final name = _asString(member['name']);
@@ -791,6 +1139,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
       appBar: AppBar(
         title: const Text('Моя семья'),
         actions: [
+          IconButton(
+            tooltip: 'Фамильное древо',
+            icon: const Icon(Icons.account_tree, color: Colors.teal),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FamilyTreeScreen(),
+                ),
+              );
+            },
+          ),
           TextButton.icon(
             icon: const Icon(Icons.card_giftcard, color: Colors.teal),
             label: const Text(
