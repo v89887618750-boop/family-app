@@ -127,7 +127,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> with SingleTickerProv
           child: Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
-              onTap: () => _openAddEdit(item: item),
+              // <-- ИСПРАВЛЕНО: привязка к открытию редактора
+              onTap: () => _openAddEdit(item: item), 
               leading: Checkbox(
                 value: item.isCompleted,
                 onChanged: (_) async {
