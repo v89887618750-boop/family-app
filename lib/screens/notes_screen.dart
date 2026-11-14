@@ -72,7 +72,7 @@ class _NotesScreenState extends State<NotesScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (photoPath != null)
-                  Image.file(File(photoPath), height: 100),
+                  Image.file(File(photoPath!), height: 100),
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
