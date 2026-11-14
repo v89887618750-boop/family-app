@@ -71,9 +71,8 @@ class _NotesScreenState extends State<NotesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Фото (исправлено)
                 if (photoPath != null)
-                  Image.file(File(photoPath!), height: 100),
+                  Image.file(File(photoPath), height: 100),
                 TextButton.icon(
                   onPressed: () async {
                     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -116,7 +115,10 @@ class _NotesScreenState extends State<NotesScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () async {
-                if (titleController.text.trim().isEmpty) return;
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Напишите заголовок!')));
+                  return;
+                }
                 final db = await DatabaseHelper.instance.database;
                 
                 final data = {
@@ -128,13 +130,19 @@ class _NotesScreenState extends State<NotesScreen> {
                   'photo_path': photoPath,
                 };
 
-                if (note == null) {
-                  await db.insert('notes', data);
-                } else {
-                  await db.update('notes', data, where: 'id = ?', whereArgs: [note['id']]);
+                try {
+                  if (note == null) {
+                    await db.insert('notes', data);
+                  } else {
+                    await db.update('notes', data, where: 'id = ?', whereArgs: [note['id']]);
+                  }
+                  if (mounted) Navigator.pop(context);
+                  _loadNotes();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка: $e')),
+                  );
                 }
-                if (mounted) Navigator.pop(context);
-                _loadNotes();
               },
               child: const Text('Сохранить'),
             ),
