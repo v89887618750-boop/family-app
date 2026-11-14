@@ -185,7 +185,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
             }
             _loadData();
           },
-          onEdit: () => _openAddEdit(task: task),
+          onEdit: () => _openAddEdit(task: task), // <-- ИСПРАВЛЕНО: привязка редактирования
           onDelete: () async {
             final db = await DatabaseHelper.instance.database;
             await db.delete('tasks', where: 'id = ?', whereArgs: [task.id]);
