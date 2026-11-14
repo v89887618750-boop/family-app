@@ -69,6 +69,9 @@ class NotificationService {
         when,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        // В flutter_local_notifications 17.x этот параметр обязательный.
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
       );
     } on PlatformException catch (e) {
       // На Android 12+ может не быть разрешения на точные будильники.
@@ -80,6 +83,8 @@ class NotificationService {
         when,
         details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
       );
     }
   }
