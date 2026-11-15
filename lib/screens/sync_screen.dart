@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../sync/supabase_config.dart';
 import '../sync/sync_service.dart';
 
 /// Экран синхронизации: вход в общий аккаунт семьи и обмен данными.
@@ -224,9 +223,99 @@ class _SyncScreenState extends State<SyncScreen> {
     );
   }
 
+  /// Показывает текущий адрес сервера и позволяет поменять его с телефона —
+  /// без пересборки APK. Опечатку в URL теперь видно и можно исправить сразу.
+  Widget _buildConnectionCard() {
+    final url = SyncService.effectiveUrl;
+
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.dns, color: Colors.teal),
+        title: const Text('Адрес сервера'),
+        subtitle: SelectableText(url.isEmpty ? 'не задан' : url),
+        trailing: IconButton(
+          tooltip: 'Изменить адрес',
+          icon: const Icon(Icons.edit),
+          onPressed: _editConnection,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editConnection() async {
+    final urlController = TextEditingController(text: SyncService.effectiveUrl);
+    final keyController = TextEditingController();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Адрес сервера'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: urlController,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Project URL',
+                  hintText: 'https://xxxxxxxxxxxx.supabase.co',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: keyController,
+                autocorrect: false,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Anon key (необязательно)',
+                  hintText: 'eyJhbGciOi...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Ключ можно не вводить — останется текущий. '
+                'Чтобы вернуть значения из сборки, очистите поле URL.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved != true) return;
+
+    await SyncService.saveConnection(
+      url: urlController.text,
+      anonKey: keyController.text,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isError = false;
+      _status = urlController.text.trim().isEmpty
+          ? 'Вернули адрес из сборки.'
+          : 'Адрес сохранён. Попробуйте снова.';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final configured = SupabaseConfig.isReady;
+    final configured = SyncService.isConfigured;
     final signedIn = SyncService.isSignedIn;
     final email = SyncService.currentEmail ?? '';
 
@@ -235,6 +324,8 @@ class _SyncScreenState extends State<SyncScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildConnectionCard(),
+          const SizedBox(height: 12),
           if (!configured)
             _buildNotConfigured()
           else if (!signedIn)
@@ -244,19 +335,23 @@ class _SyncScreenState extends State<SyncScreen> {
           if (configured) ...[
             const SizedBox(height: 20),
             if (_busy)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(8),
-                child: CircularProgressIndicator(),
-              )),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
             if (_status != null)
               Card(
                 color: _isError ? Colors.red.shade50 : Colors.teal.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
+                  child: SelectableText(
                     _status!,
                     style: TextStyle(
-                      color: _isError ? Colors.red.shade900 : Colors.teal.shade900,
+                      color: _isError
+                          ? Colors.red.shade900
+                          : Colors.teal.shade900,
                     ),
                   ),
                 ),
