@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../db/database_helper.dart';
 import '../sync/sync_db.dart';
+import '../utils/startup_log.dart';
 import 'sync_screen.dart';
 
 /// Настройки приложения: тема, размер шрифта, категории.
@@ -324,6 +325,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(),
           ],
+          const Divider(),
+          const ListTile(
+            title: Text(
+              'Диагностика',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+          if (!StartupLog.hasProblems)
+            const ListTile(
+              leading: Icon(Icons.check_circle, color: Colors.teal),
+              title: Text('Ошибок запуска нет'),
+              subtitle: Text('Приложение стартовало без сбоев'),
+            )
+          else
+            ...StartupLog.messages.map(
+              (message) => ListTile(
+                leading: const Icon(Icons.error_outline, color: Colors.red),
+                title: const Text(
+                  'Ошибка запуска',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: SelectableText(message),
+              ),
+            ),
+          const ListTile(
+            leading: Icon(Icons.storage, color: Colors.blue),
+            title: Text('Версия схемы базы данных'),
+            subtitle: Text('16'),
+          ),
+          const Divider(),
           const ListTile(
             title: Text(
               'О приложении',

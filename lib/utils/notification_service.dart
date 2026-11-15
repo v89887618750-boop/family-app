@@ -11,17 +11,38 @@ class NotificationService {
 
   static bool _initialized = false;
 
+  /// Возможные имена иконки: у сборки может быть как `ic_launcher`,
+  /// так и `launcher_icon` (flutter_launcher_icons в pubspec).
+  /// Перебираем по очереди — если ресурса нет, плагин бросает исключение,
+  /// и раньше это убивало приложение на старте.
+  static const List<String> _iconCandidates = <String>[
+    '@mipmap/ic_launcher',
+    '@mipmap/launcher_icon',
+    'ic_launcher',
+    'launcher_icon',
+  ];
+
   static Future<void> init() async {
     if (_initialized) return;
 
     _initTimeZone();
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidSettings);
+    Object? lastError;
+    for (final icon in _iconCandidates) {
+      try {
+        await _plugin.initialize(
+          InitializationSettings(
+            android: AndroidInitializationSettings(icon),
+          ),
+        );
+        _initialized = true;
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
 
-    await _plugin.initialize(initSettings);
-    _initialized = true;
+    throw Exception('не удалось инициализировать уведомления: $lastError');
   }
 
   /// timezone по умолчанию берёт UTC — из-за этого напоминания приходили
