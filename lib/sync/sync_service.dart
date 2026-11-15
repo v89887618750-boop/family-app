@@ -115,21 +115,65 @@ class SyncService {
   // ---------------------------------------------------------------------------
 
   /// Загружает сохранённую сессию. Вызывается один раз в main().
-  static Future<void> init() async {
-    if (!SupabaseConfig.isConfigured) {
-      SupabaseConfig.ready = false;
-      return;
-    }
+  static const String _kUrlOverride = 'sb_url_override';
+  static const String _kKeyOverride = 'sb_key_override';
 
+  static String? _urlOverride;
+  static String? _keyOverride;
+
+  static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+
+    _urlOverride = prefs.getString(_kUrlOverride);
+    _keyOverride = prefs.getString(_kKeyOverride);
     _accessToken = prefs.getString(_kAccess);
     _refreshToken = prefs.getString(_kRefresh);
     _expiresAtMs = prefs.getInt(_kExpires) ?? 0;
     _email = prefs.getString(_kEmail);
-    SupabaseConfig.ready = true;
+
+    SupabaseConfig.ready = isConfigured;
   }
 
-  static bool get isConfigured => SupabaseConfig.isConfigured;
+  /// Адрес сервера: ручная настройка с телефона важнее значения из сборки.
+  static String get effectiveUrl => (_urlOverride ?? SupabaseConfig.url).trim();
+
+  /// Anon-ключ: тоже можно переопределить на устройстве.
+  static String get effectiveAnonKey =>
+      (_keyOverride ?? SupabaseConfig.anonKey).trim();
+
+  /// Явно задать адрес и ключ на устройстве — без пересборки APK.
+  /// Пустая строка сбрасывает переопределение.
+  static Future<void> saveConnection({
+    required String url,
+    required String anonKey,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    var cleanUrl = url.trim();
+    while (cleanUrl.endsWith('/')) {
+      cleanUrl = cleanUrl.substring(0, cleanUrl.length - 1);
+    }
+    final cleanKey = anonKey.trim();
+
+    if (cleanUrl.isEmpty) {
+      await prefs.remove(_kUrlOverride);
+    } else {
+      await prefs.setString(_kUrlOverride, cleanUrl);
+    }
+
+    if (cleanKey.isEmpty) {
+      await prefs.remove(_kKeyOverride);
+    } else {
+      await prefs.setString(_kKeyOverride, cleanKey);
+    }
+
+    _urlOverride = cleanUrl.isEmpty ? null : cleanUrl;
+    _keyOverride = cleanKey.isEmpty ? null : cleanKey;
+    SupabaseConfig.ready = isConfigured;
+  }
+
+  static bool get isConfigured =>
+      effectiveUrl.isNotEmpty && effectiveAnonKey.isNotEmpty;
 
   static bool get isSignedIn => isConfigured && (_accessToken ?? '').isNotEmpty;
 
@@ -161,14 +205,19 @@ class SyncService {
     if (!isConfigured) {
       throw const SyncException('Синхронизация не настроена на этой сборке.');
     }
-    final uri = Uri.parse('${SupabaseConfig.url}/auth/v1/token?grant_type=password');
-    final response = await http
-        .post(
-          uri,
-          headers: _baseHeaders(),
-          body: jsonEncode({'email': email.trim(), 'password': password}),
-        )
-        .timeout(_timeout);
+    final uri = Uri.parse('${effectiveUrl}/auth/v1/token?grant_type=password');
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            uri,
+            headers: _baseHeaders(),
+            body: jsonEncode({'email': email.trim(), 'password': password}),
+          )
+          .timeout(_timeout);
+    } catch (e) {
+      throw SyncException(_networkErrorText(e));
+    }
 
     _applyAuthResponse(response, fallbackEmail: email.trim());
     await _persistSession();
@@ -178,14 +227,19 @@ class SyncService {
     if (!isConfigured) {
       throw const SyncException('Синхронизация не настроена на этой сборке.');
     }
-    final uri = Uri.parse('${SupabaseConfig.url}/auth/v1/signup');
-    final response = await http
-        .post(
-          uri,
-          headers: _baseHeaders(),
-          body: jsonEncode({'email': email.trim(), 'password': password}),
-        )
-        .timeout(_timeout);
+    final uri = Uri.parse('${effectiveUrl}/auth/v1/signup');
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            uri,
+            headers: _baseHeaders(),
+            body: jsonEncode({'email': email.trim(), 'password': password}),
+          )
+          .timeout(_timeout);
+    } catch (e) {
+      throw SyncException(_networkErrorText(e));
+    }
 
     _applyAuthResponse(
       response,
@@ -207,7 +261,7 @@ class SyncService {
 
   static Map<String, String> _baseHeaders() {
     return <String, String>{
-      'apikey': SupabaseConfig.anonKey,
+      'apikey': effectiveAnonKey,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
@@ -215,7 +269,7 @@ class SyncService {
 
   static Map<String, String> _authHeaders() {
     return <String, String>{
-      'apikey': SupabaseConfig.anonKey,
+      'apikey': effectiveAnonKey,
       'Authorization': 'Bearer ${_accessToken ?? ''}',
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -342,15 +396,19 @@ class SyncService {
     }
 
     final uri =
-        Uri.parse('${SupabaseConfig.url}/auth/v1/token?grant_type=refresh_token');
-    final response = await http
-        .post(
-          uri,
-          headers: _baseHeaders(),
-          body: jsonEncode({'refresh_token': refresh}),
-        )
-        .timeout(_timeout);
-
+        Uri.parse('${effectiveUrl}/auth/v1/token?grant_type=refresh_token');
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            uri,
+            headers: _baseHeaders(),
+            body: jsonEncode({'refresh_token': refresh}),
+          )
+          .timeout(_timeout);
+    } catch (e) {
+      throw SyncException(_networkErrorText(e));
+    }
     _applyAuthResponse(
       response,
       fallbackEmail: _email ?? '',
@@ -366,10 +424,15 @@ class SyncService {
       await _refreshIfNeeded();
 
       final uri = Uri.parse(
-        '${SupabaseConfig.url}/rest/v1/$_remoteTable?select=*',
+        '${effectiveUrl}/rest/v1/$_remoteTable?select=*',
       );
-      final response =
-          await http.get(uri, headers: _authHeaders()).timeout(_timeout);
+      final http.Response response;
+      try {
+        response =
+            await http.get(uri, headers: _authHeaders()).timeout(_timeout);
+      } catch (e) {
+        throw SyncException(_networkErrorText(e));
+      }
 
       if (response.statusCode != 200) {
         throw SyncException(_restErrorText(response));
@@ -397,7 +460,7 @@ class SyncService {
 
       await _writeMeta(db, 'last_pull', maxUpdated);
     } catch (e) {
-      errors.add(e is SyncException ? e.message : 'Не удалось получить данные: $e');
+      errors.add(e is SyncException ? e.message : _networkErrorText(e));
     }
 
     return processed;
@@ -417,7 +480,7 @@ class SyncService {
       await _refreshIfNeeded();
 
       final uri = Uri.parse(
-        '${SupabaseConfig.url}/rest/v1/$_remoteTable?on_conflict=sync_id',
+        '${effectiveUrl}/rest/v1/$_remoteTable?on_conflict=sync_id',
       );
 
       for (var index = 0; index < outgoing.length; index += 200) {
@@ -425,16 +488,21 @@ class SyncService {
             index + 200 <= outgoing.length ? index + 200 : outgoing.length;
         final chunk = outgoing.sublist(index, end);
 
-        final response = await http
-            .post(
-              uri,
-              headers: <String, String>{
-                ..._authHeaders(),
-                'Prefer': 'resolution=merge-duplicates,return=minimal',
-              },
-              body: jsonEncode(chunk),
-            )
-            .timeout(_timeout);
+        final http.Response response;
+        try {
+          response = await http
+              .post(
+                uri,
+                headers: <String, String>{
+                  ..._authHeaders(),
+                  'Prefer': 'resolution=merge-duplicates,return=minimal',
+                },
+                body: jsonEncode(chunk),
+              )
+              .timeout(_timeout);
+        } catch (e) {
+          throw SyncException(_networkErrorText(e));
+        }
 
         if (response.statusCode < 200 || response.statusCode >= 300) {
           throw SyncException(_restErrorText(response));
@@ -450,9 +518,34 @@ class SyncService {
 
       return outgoing.length;
     } catch (e) {
-      errors.add(e is SyncException ? e.message : 'Не удалось отправить данные: $e');
+      errors.add(e is SyncException ? e.message : _networkErrorText(e));
       return 0;
     }
+  }
+
+  /// Понятный текст для сетевых ошибок (DNS, таймаут, отказ подключения).
+  /// В сообщение всегда попадает адрес, с которым шла попытка — чтобы
+  /// опечатку в URL было видно сразу.
+  static String _networkErrorText(Object error) {
+    final text = error.toString();
+
+    if (text.contains('Failed host lookup') ||
+        text.contains('No address associated') ||
+        text.contains('nodename nor servname')) {
+      return 'Не удалось найти сервер по адресу "${effectiveUrl}". '
+          'Проверьте адрес (частая причина — опечатка в project ref).';
+    }
+    if (text.contains('Connection refused')) {
+      return 'Сервер отклонил подключение: ${effectiveUrl}';
+    }
+    if (text.contains('Timeout')) {
+      return 'Сервер не ответил за 30 секунд: ${effectiveUrl}';
+    }
+    if (text.contains('SocketException') || text.contains('ClientException')) {
+      return 'Нет связи с сервером "${effectiveUrl}". '
+          'Проверьте интернет и адрес.';
+    }
+    return 'Ошибка сети: $text';
   }
 
   static String _restErrorText(http.Response response) {
